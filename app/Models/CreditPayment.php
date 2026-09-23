@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CreditPayment extends Model
 {
     protected $fillable = [
-        'event_id', 'seller_id', 'amount', 'cash_amount', 'transfer_amount', 'received_by', 'note',
+        'event_id', 'seller_id', 'station_id', 'amount', 'cash_amount', 'transfer_amount', 'received_by', 'note',
     ];
 
     protected $casts = [
@@ -25,5 +25,11 @@ class CreditPayment extends Model
     public function receiver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'received_by');
+    }
+
+    /** จุดขายที่รับชำระใบนี้ (หนึ่งใบชำระ = หนึ่งจุดเสมอ) */
+    public function station(): BelongsTo
+    {
+        return $this->belongsTo(Station::class);
     }
 }

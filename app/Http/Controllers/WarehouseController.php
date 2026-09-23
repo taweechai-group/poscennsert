@@ -82,16 +82,33 @@ class WarehouseController extends Controller
         return back()->with('success', 'ปรับสต๊อกเรียบร้อย');
     }
 
-    /** ประวัติการเคลื่อนไหวสต๊อก */
+    /** ประวัติการเคลื่อนไหวสต๊อก (แบ่งหน้า + กรองได้) */
     public function movements(Request $request)
     {
         $eventId = $this->eventId();
+
+        $filters = $request->validate([
+            'station_id' => 'nullable|integer|exists:stations,id',
+            'product_id' => 'nullable|integer|exists:products,id',
+            'type' => 'nullable|string|in:in,out,sale,transfer_in,transfer_out,adjust',
+            'per_page' => 'nullable|integer|in:25,50,100,200',
+        ]);
+
+        $perPage = (int) ($filters['per_page'] ?? 50);
+
         $movements = StockMovement::where('event_id', $eventId)
             ->with('station', 'product', 'user')
-            ->latest()
-            ->paginate(50);
+            ->when($filters['station_id'] ?? null, fn ($q, $v) => $q->where('station_id', $v))
+            ->when($filters['product_id'] ?? null, fn ($q, $v) => $q->where('product_id', $v))
+            ->when($filters['type'] ?? null, fn ($q, $v) => $q->where('type', $v))
+            ->latest('id')
+            ->paginate($perPage)
+            ->withQueryString();
 
-        return view('warehouse.movements', compact('movements'));
+        $stations = Station::where('event_id', $eventId)->orderBy('type', 'desc')->orderBy('name')->get();
+        $products = Product::where('event_id', $eventId)->orderBy('sort_order')->get();
+
+        return view('warehouse.movements', compact('movements', 'stations', 'products', 'filters', 'perPage'));
     }
 
     private function eventId(): int

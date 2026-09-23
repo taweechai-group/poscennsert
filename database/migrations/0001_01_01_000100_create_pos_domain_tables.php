@@ -15,7 +15,7 @@ return new class extends Migration
         // งาน/อีเวนต์ — ข้อมูลทั้งหมดแยกตาม event
         Schema::create('events', function (Blueprint $table) {
             $table->id();
-            $table->string('name');                       // เช่น "คอนเสิร์ต Rock Fest 2026"
+            $table->string('name');                       // เช่น "คอนเสิร์ต แอน อรดี & ปู พงษ์สิทธิ์"
             $table->string('location')->nullable();
             $table->date('event_date')->nullable();
             $table->string('status')->default('active');  // active | closed

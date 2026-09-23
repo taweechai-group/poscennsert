@@ -122,6 +122,11 @@
                     </button>
                 </div>
                 <div class="col-12">
+                    <button class="btn pay-btn w-100" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff" onclick="checkout('split')">
+                        <i class="bi bi-wallet2"></i> เงินสด + เงินโอน
+                    </button>
+                </div>
+                <div class="col-12">
                     <button class="btn btn-grad-amber pay-btn w-100" onclick="checkout('credit')">
                         <i class="bi bi-person-badge"></i> ขายเครดิต (เชียร์เบียร์)
                     </button>
@@ -222,6 +227,7 @@ async function checkout(type) {
     const total = cartTotal();
     let paid = total;
     let sellerId = null;   // จะถูกกำหนดตอนเลือกเชียร์เบียร์ในกรณีเครดิต
+    let cashAmount = null, transferAmount = null;  // ใช้เฉพาะจ่ายผสม
 
     if (type === 'cash') {
         const { value } = await Swal.fire({
@@ -239,6 +245,58 @@ async function checkout(type) {
             showCancelButton: true, confirmButtonText: 'ยืนยันรับโอน', cancelButtonText: 'ยกเลิก',
         });
         if (!ok.isConfirmed) return;
+        paid = total;
+    } else if (type === 'split') {
+        const result = await Swal.fire({
+            title: 'เงินสด + เงินโอน',
+            html: `<div class="mb-2">ยอดบิล <b style="color:#a5b4fc;font-size:1.4rem">฿${baht(total)}</b></div>`
+                + `<div style="text-align:left;max-width:280px;margin:0 auto">`
+                + `<label style="font-size:.9rem" for="swalCash">ยอดเงินสด (฿)</label>`
+                + `<input id="swalCash" type="number" min="0" step="1" class="swal2-input" style="width:100%;margin:.25rem 0" placeholder="0">`
+                + `<label style="font-size:.9rem" for="swalTransfer">ยอดเงินโอน (฿)</label>`
+                + `<input id="swalTransfer" type="number" min="0" step="1" class="swal2-input" style="width:100%;margin:.25rem 0" placeholder="0">`
+                + `<div id="swalSplitNote" style="font-size:.9rem;min-height:22px;color:#94a3b8">กรอกช่องไหนก็ได้ อีกช่องจะคำนวณให้อัตโนมัติ</div>`
+                + `</div>`,
+            didOpen: () => {
+                const cashInp = document.getElementById('swalCash');
+                const trInp = document.getElementById('swalTransfer');
+                const note = document.getElementById('swalSplitNote');
+
+                // กรอกช่องไหน อีกช่องเติมส่วนที่เหลือให้เอง
+                function sync(src, dst) {
+                    const v = parseFloat(src.value);
+                    if (src.value === '' || isNaN(v)) { dst.value = ''; showNote(); return; }
+                    dst.value = Math.max(0, Math.round((total - v) * 100) / 100);
+                    showNote();
+                }
+                function showNote() {
+                    const c = parseFloat(cashInp.value) || 0;
+                    const t = parseFloat(trInp.value) || 0;
+                    if (c <= 0 || t <= 0) {
+                        note.textContent = 'กรอกช่องไหนก็ได้ อีกช่องจะคำนวณให้อัตโนมัติ';
+                        note.style.color = '#94a3b8';
+                    } else {
+                        note.innerHTML = `สด ฿${baht(c)} + โอน ฿${baht(t)} = <b>฿${baht(c + t)}</b>`;
+                        note.style.color = '#34d399';
+                    }
+                }
+                cashInp.addEventListener('input', () => sync(cashInp, trInp));
+                trInp.addEventListener('input', () => sync(trInp, cashInp));
+                cashInp.focus();
+            },
+            showCancelButton: true, confirmButtonText: 'ยืนยันรับชำระ', cancelButtonText: 'ยกเลิก',
+            confirmButtonColor: '#6366f1',
+            preConfirm: () => {
+                const c = parseFloat(document.getElementById('swalCash').value) || 0;
+                const t = parseFloat(document.getElementById('swalTransfer').value) || 0;
+                if (c <= 0 || t <= 0) { Swal.showValidationMessage('ต้องระบุยอดทั้งเงินสดและเงินโอน'); return false; }
+                if (Math.abs((c + t) - total) > 0.01) { Swal.showValidationMessage('สด + โอน ต้องเท่ากับยอดบิลพอดี'); return false; }
+                return { cash: c, transfer: t };
+            },
+        });
+        if (!result.isConfirmed) return;
+        cashAmount = result.value.cash;
+        transferAmount = result.value.transfer;
         paid = total;
     } else { // credit — เลือกเชียร์เบียร์ในป๊อปอัปนี้เลย
         if (SELLERS.length === 0) {
@@ -286,7 +344,10 @@ async function checkout(type) {
     const res = await fetch('{{ route('pos.checkout') }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.CSRF, 'Accept': 'application/json' },
-        body: JSON.stringify({ items, payment_type: type, seller_id: sellerId || null, paid }),
+        body: JSON.stringify({
+            items, payment_type: type, seller_id: sellerId || null, paid,
+            cash_amount: cashAmount, transfer_amount: transferAmount,
+        }),
     });
     const data = await res.json();
     if (!data.ok) { Swal.fire({ icon: 'error', title: 'ขายไม่สำเร็จ', text: data.message }); return; }
@@ -295,6 +356,7 @@ async function checkout(type) {
     let detail = '';
     if (type === 'cash') detail = `<br>รับ ฿${baht(paid)}<br><b style="color:#34d399;font-size:1.3rem">ทอน ฿${baht(change)}</b>`;
     else if (type === 'transfer') detail = '<br><span style="color:#22d3ee">ชำระด้วยเงินโอน</span>';
+    else if (type === 'split') detail = `<br><span style="color:#a5b4fc">เงินสด ฿${baht(cashAmount)} + เงินโอน ฿${baht(transferAmount)}</span>`;
     else detail = '<br><span style="color:#fbbf24">ลงเครดิตแล้ว</span>';
 
     await Swal.fire({

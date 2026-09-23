@@ -5,9 +5,14 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="mb-0"><i class="bi bi-person-badge text-primary"></i> เชียร์เบียร์ / เครดิต</h5>
-        <button class="btn btn-grad" onclick="openAddSeller()">
-            <i class="bi bi-person-plus"></i> เพิ่มเชียร์เบียร์
-        </button>
+        @if($user->isAdmin())
+            <button class="btn btn-grad" onclick="openAddSeller()">
+                <i class="bi bi-person-plus"></i> เพิ่มเชียร์เบียร์
+            </button>
+        @else
+            {{-- POS รับชำระได้อย่างเดียว เพิ่ม/แก้ไขเป็นงานแอดมิน --}}
+            <span class="badge bg-secondary"><i class="bi bi-lock"></i> เพิ่ม/แก้ไข: แอดมินเท่านั้น</span>
+        @endif
     </div>
 
     <div class="row g-4">
@@ -26,7 +31,9 @@
                             <span class="fw-semibold fs-5">{{ $s->name }}</span>
                             @if($s->phone)<div><small class="text-dim"><i class="bi bi-telephone"></i> {{ $s->phone }}</small></div>@endif
                         </div>
-                        <button class="btn btn-sm btn-outline-light" onclick="editSeller({{ \Illuminate\Support\Js::from($sData) }})"><i class="bi bi-pencil"></i></button>
+                        @if($user->isAdmin())
+                            <button class="btn btn-sm btn-outline-light" onclick="editSeller({{ \Illuminate\Support\Js::from($sData) }})"><i class="bi bi-pencil"></i></button>
+                        @endif
                     </div>
                     <hr class="my-2">
                     <div class="row text-center g-1 mb-2">
@@ -59,6 +66,8 @@
     </div>
 </div>
 
+{{-- ฟอร์มเพิ่ม/แก้ไข — แสดงเฉพาะแอดมิน --}}
+@if($user->isAdmin())
 <div class="modal fade" id="sellerModal" tabindex="-1">
     <div class="modal-dialog">
         <form method="POST" id="sellerForm" class="modal-content">
@@ -113,4 +122,5 @@ function editSeller(s) {
 }
 </script>
 @endpush
+@endif
 @endsection

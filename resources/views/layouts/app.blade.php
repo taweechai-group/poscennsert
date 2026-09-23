@@ -36,6 +36,8 @@
             min-height: 100vh;
         }
         .text-dim { color: var(--txt-dim) !important; }
+        /* Bootstrap .text-muted เป็นสีเทาเข้ม อ่านไม่ออกบนพื้นมืด ใช้สีเดียวกับ .text-dim แทน */
+        .text-muted { color: var(--txt-dim) !important; }
 
         /* ---------- Glass cards ---------- */
         .card, .glass {
@@ -86,7 +88,17 @@
             border-color: var(--accent); box-shadow: 0 0 0 .2rem rgba(99,102,241,.25);
         }
         .form-control::placeholder { color: #5f6b85; }
-        .form-select option { background: var(--bg-1); color: var(--txt); }
+        /* ให้เบราว์เซอร์วาด dropdown ของ select เป็นธีมมืด (ไม่งั้นพื้นขาว-ตัวหนังสือขาว มองไม่เห็น) */
+        select, .form-select, .swal2-select { color-scheme: dark; }
+        select option, .form-select option, .swal2-select option {
+            background: var(--bg-1); color: var(--txt);
+        }
+        select option:disabled, .form-select option:disabled, .swal2-select option:disabled {
+            color: #7b869e;
+        }
+        select option:checked, .form-select option:checked, .swal2-select option:checked {
+            background: var(--accent); color: #fff;
+        }
         .form-label { color: var(--txt-dim); font-size: .85rem; font-weight: 500; }
 
         /* ---------- Tables ---------- */
@@ -116,6 +128,17 @@
         .stat-tile { padding: 1.1rem 1.25rem; }
         .stat-icon { width: 46px; height: 46px; border-radius: .8rem; display: grid; place-items: center; font-size: 1.4rem; }
 
+        /* ---------- SweetAlert2 select (dark) ---------- */
+        .swal2-popup .swal2-select {
+            background: rgba(255,255,255,.06); border: 1px solid var(--stroke-2);
+            color: var(--txt); border-radius: .6rem; padding: .6rem .75rem;
+            font-family: 'Kanit', sans-serif; font-size: 1.05rem; margin: .5rem auto;
+        }
+        .swal2-popup .swal2-select:focus {
+            outline: none; border-color: var(--accent);
+            box-shadow: 0 0 0 .2rem rgba(99,102,241,.25);
+        }
+
         /* ---------- Modal (dark) ---------- */
         .modal-content { background: var(--bg-1); color: var(--txt); border: 1px solid var(--stroke-2); border-radius: 1rem; }
         .modal-header, .modal-footer { border-color: var(--stroke); }
@@ -137,6 +160,18 @@
             body * { visibility: hidden; }
             #print-area, #print-area * { visibility: visible; }
             #print-area { position: absolute; left: 0; top: 0; width: 100%; color: #000; }
+            /* พิมพ์ลงกระดาษขาว ต้องบังคับตัวหนังสือเป็นสีดำ ไม่งั้นสีอ่อน ๆ ของธีมมืดจะจางจนมองไม่เห็น */
+            #print-area *, #print-area .text-dim, #print-area .text-muted,
+            #print-area .text-info, #print-area .text-success,
+            #print-area .text-warning, #print-area .text-primary,
+            #print-area .text-danger, #print-area .text-white { color: #000 !important; }
+            #print-area .card, #print-area .table, #print-area thead.table-light th,
+            #print-area .table-light, #print-area .table-light > th, #print-area .table-light > td {
+                background: #fff !important; --bs-table-bg: #fff !important;
+                --bs-table-color: #000 !important; border-color: #999 !important;
+                box-shadow: none !important; backdrop-filter: none !important;
+            }
+            #print-area .table > :not(caption) > * > * { border-color: #999 !important; color: #000 !important; }
             .no-print { display: none !important; }
         }
     </style>
@@ -149,7 +184,7 @@
         <div class="container-fluid px-lg-4">
             <a class="navbar-brand d-flex align-items-center gap-2 fw-semibold text-white" href="{{ route('home') }}">
                 <span class="brand-badge"><i class="bi bi-cup-hot-fill"></i></span>
-                <span class="d-none d-sm-inline">POS คอนเสิร์ต</span>
+                <span class="d-none d-sm-inline">{{ $currentEvent->name ?? 'POS คอนเสิร์ต' }}</span>
             </a>
             <button class="navbar-toggler border-0 text-white" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
                 <i class="bi bi-list fs-3"></i>
@@ -171,9 +206,12 @@
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.products') ? 'active' : '' }}" href="{{ route('admin.products') }}"><i class="bi bi-box"></i> สินค้า</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.stations') ? 'active' : '' }}" href="{{ route('admin.stations') }}"><i class="bi bi-shop"></i> จุดขาย</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.users') ? 'active' : '' }}" href="{{ route('admin.users') }}"><i class="bi bi-people"></i> พนักงาน</a></li>
+                        {{-- จัดการเชียร์เบียร์ (เพิ่ม/แก้ไข/ตั้งวงเงิน) เป็นงานแอดมิน --}}
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('sellers.*') ? 'active' : '' }}" href="{{ route('sellers.index') }}"><i class="bi bi-person-badge"></i> จัดการเชียร์เบียร์</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.report') ? 'active' : '' }}" href="{{ route('admin.report') }}"><i class="bi bi-graph-up"></i> สรุปยอด</a></li>
                     @endif
-                    @if(!$u->isAdmin())
+                    @if($u->isCashier())
+                        {{-- POS เข้าหน้าเดียวกัน แต่รับชำระได้อย่างเดียว --}}
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('sellers.*') ? 'active' : '' }}" href="{{ route('sellers.index') }}"><i class="bi bi-person-badge"></i> เชียร์เบียร์</a></li>
                     @endif
                 </ul>

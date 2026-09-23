@@ -40,24 +40,50 @@
     <div class="card p-3 mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h6 class="mb-0"><i class="bi bi-clipboard-check" style="color:#fbbf24"></i> บิลเครดิตค้าง ({{ $openCredits->count() }} บิล)</h6>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="checkAll" onchange="toggleAll(this)">
-                <label class="form-check-label small" for="checkAll">เลือกทั้งหมด</label>
-            </div>
+            @if($user->isCashier())
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="checkAll" onchange="toggleAll(this)">
+                    <label class="form-check-label small" for="checkAll">เลือกทั้งหมด (จุดเดียวกัน)</label>
+                </div>
+            @endif
         </div>
 
+        @if($user->isCashier())
+            {{-- เชียร์เบียร์ไปเอาของได้หลายจุด แต่เคลียร์บิลข้ามจุดไม่ได้ --}}
+            <div class="alert alert-warning py-2 px-3 small mb-3">
+                <i class="bi bi-exclamation-triangle"></i>
+                <b>เคลียร์บิลข้ามจุดไม่ได้</b> — เลือกได้ทีละจุดเท่านั้น บิลของจุดไหนต้องเคลียร์ที่จุดนั้น
+                <br><span class="text-dim">แสดงเฉพาะบิลของ {{ $user->station->name ?? 'จุดของคุณ' }}</span>
+            </div>
+        @else
+            {{-- แอดมินดูได้อย่างเดียว รับชำระเป็นงานของ POS ที่จุดขาย --}}
+            <div class="alert alert-secondary py-2 px-3 small mb-3">
+                <i class="bi bi-eye"></i>
+                <b>มุมมองแอดมิน (ดูอย่างเดียว)</b> — รับชำระเครดิตทำที่จุดขายโดยแคชเชียร์เท่านั้น
+                @if($creditsByStation->count() > 1)
+                    <br><span class="text-dim">มีบิลค้างจาก {{ $creditsByStation->count() }} จุด</span>
+                @endif
+            </div>
+        @endif
+
+        {{-- แอดมินดูอย่างเดียว: ไม่ต้องมีฟอร์ม/ปุ่มรับชำระ --}}
+        @if($user->isCashier())
         <form method="POST" action="{{ route('sellers.pay', $seller) }}" id="settleForm">
             @csrf
+        @endif
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
-                        <tr><th style="width:44px"></th><th>บิล</th><th>เวลา</th><th>รายการ</th><th class="text-end">ยอด</th></tr>
+                        <tr>@if($user->isCashier())<th style="width:44px"></th>@endif<th>บิล</th><th>จุดขาย</th><th>เวลา</th><th>รายการ</th><th class="text-end">ยอด</th></tr>
                     </thead>
                     <tbody>
                         @foreach($openCredits as $c)
                             <tr>
-                                <td><input class="form-check-input credit-check" type="checkbox" name="credit_ids[]" value="{{ $c->id }}" data-amount="{{ $c->amount }}" onchange="recalc()"></td>
+                                @if($user->isCashier())
+                                <td><input class="form-check-input credit-check" type="checkbox" name="credit_ids[]" value="{{ $c->id }}" data-amount="{{ $c->amount }}" data-station="{{ $c->sale?->station_id ?? '' }}" data-station-name="{{ $c->sale?->station?->name ?? '-' }}" onchange="recalc(this)"></td>
+                                @endif
                                 <td class="fw-semibold">{{ $c->sale?->bill_no ?? '-' }}</td>
+                                <td><span class="badge bg-secondary">{{ $c->sale?->station?->name ?? '-' }}</span></td>
                                 <td><small>{{ $c->created_at->format('d/m H:i') }}</small></td>
                                 <td><small class="text-dim">{{ $c->sale ? $c->sale->items->map(fn($i)=>$i->product_name.'×'.$i->quantity)->join(', ') : '-' }}</small></td>
                                 <td class="text-end fw-bold text-warning">฿{{ number_format($c->amount,0) }}</td>
@@ -66,19 +92,34 @@
                     </tbody>
                 </table>
             </div>
+            @if($user->isCashier())
             <input type="hidden" name="note" id="settleNote">
             <input type="hidden" name="cash_amount" id="settleCash">
             <input type="hidden" name="transfer_amount" id="settleTransfer">
             <div class="d-flex justify-content-between align-items-center mt-3 p-3 rounded-3" style="background:rgba(255,255,255,.04)">
-                <div>เลือก <b id="selCount">0</b> บิล · รวม <b class="text-success" style="font-size:1.4rem">฿<span id="selTotal">0</span></b></div>
+                <div>เลือก <b id="selCount">0</b> บิล<span id="selStation" class="text-info"></span> · รวม <b class="text-success" style="font-size:1.4rem">฿<span id="selTotal">0</span></b></div>
                 <button type="button" class="btn btn-grad-green" id="settleBtn" disabled onclick="confirmSettle()">
                     <i class="bi bi-cash-coin"></i> รับชำระที่เลือก
                 </button>
             </div>
         </form>
+            @else
+            <div class="d-flex justify-content-between align-items-center mt-3 p-3 rounded-3" style="background:rgba(255,255,255,.04)">
+                <div class="text-dim small"><i class="bi bi-info-circle"></i> ให้แคชเชียร์ที่จุดขายเป็นผู้รับชำระ</div>
+                <div>ค้างทั้งหมด <b class="text-warning" style="font-size:1.4rem">฿{{ number_format($openCredits->sum('amount'),0) }}</b></div>
+            </div>
+            @endif
     </div>
     @else
-        <div class="alert alert-success"><i class="bi bi-check-circle"></i> ไม่มีบิลเครดิตค้างชำระ</div>
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle"></i>
+            @if($user->isCashier())
+                ไม่มีบิลเครดิตค้างชำระที่ {{ $user->station->name ?? 'จุดของคุณ' }}
+                <div class="small text-dim mt-1">บิลของจุดอื่นต้องไปเคลียร์ที่จุดนั้น</div>
+            @else
+                ไม่มีบิลเครดิตค้างชำระ
+            @endif
+        </div>
     @endif
 
     <h6 class="mt-4 mb-2">ประวัติการชำระเครดิต</h6>
@@ -123,18 +164,61 @@
     </div>
 </div>
 
+{{-- สคริปต์รับชำระ — เฉพาะแคชเชียร์ (แอดมินดูอย่างเดียว) --}}
+@if($user->isCashier())
 @push('scripts')
 <script>
+// เชียร์เบียร์ไปเอาของได้หลายจุด แต่บิลของจุดไหนต้องเคลียร์ที่จุดนั้น
+// เลือกบิลแรกแล้ว = ล็อกจุดนั้น บิลของจุดอื่นจะถูกปิดไว้จนกว่าจะเคลียร์ตัวเลือก
 function toggleAll(el) {
-    document.querySelectorAll('.credit-check').forEach(c => c.checked = el.checked);
+    const boxes = [...document.querySelectorAll('.credit-check')];
+    if (!el.checked) {
+        boxes.forEach(c => { c.checked = false; c.disabled = false; });
+    } else {
+        // เลือกทั้งหมด = เฉพาะจุดที่ล็อกอยู่ ถ้ายังไม่ล็อก ใช้จุดของบิลแรก
+        const station = lockedStation() || (boxes[0] && boxes[0].dataset.station);
+        boxes.forEach(c => c.checked = (c.dataset.station === station));
+    }
     recalc();
 }
-function recalc() {
+
+/** จุดที่ถูกล็อกจากบิลที่เลือกไว้แล้ว (null = ยังไม่เลือกอะไร) */
+function lockedStation() {
+    const first = document.querySelector('.credit-check:checked');
+    return first ? first.dataset.station : null;
+}
+
+function recalc(changed) {
+    const station = lockedStation();
+
+    // กันติ๊กข้ามจุด — เตือนแล้วปลดติ๊กตัวที่เพิ่งเลือก
+    if (changed && changed.checked && station && changed.dataset.station !== station) {
+        changed.checked = false;
+        const lockedName = document.querySelector('.credit-check:checked').dataset.stationName;
+        Swal.fire({
+            icon: 'warning',
+            title: 'เคลียร์บิลข้ามจุดไม่ได้',
+            html: `กำลังเคลียร์บิลของ <b>${lockedName}</b><br>`
+                + `บิลของ <b>${changed.dataset.stationName}</b> ต้องรับชำระแยกกัน`,
+            confirmButtonColor: '#10b981',
+        });
+    }
+
+    // ปิดบิลของจุดอื่นไว้ ให้เห็นชัดว่าเลือกได้ทีละจุด
+    document.querySelectorAll('.credit-check').forEach(c => {
+        const other = station !== null && c.dataset.station !== station;
+        c.disabled = other;
+        c.closest('tr').style.opacity = other ? '.4' : '';
+    });
+
     const checked = [...document.querySelectorAll('.credit-check:checked')];
     const total = checked.reduce((s, c) => s + parseFloat(c.dataset.amount), 0);
     document.getElementById('selCount').textContent = checked.length;
     document.getElementById('selTotal').textContent = baht(total);
     document.getElementById('settleBtn').disabled = checked.length === 0;
+
+    const label = document.getElementById('selStation');
+    if (label) label.textContent = checked.length ? ' · จุด ' + checked[0].dataset.stationName : '';
 }
 async function confirmSettle() {
     const checked = [...document.querySelectorAll('.credit-check:checked')];
@@ -143,7 +227,7 @@ async function confirmSettle() {
     const result = await Swal.fire({
         title: 'รับชำระเครดิต',
         html:
-            `<div class="mb-2">ชำระ <b>${checked.length}</b> บิล · รวม <b style="color:#34d399;font-size:1.4rem">฿${baht(total)}</b></div>`
+            `<div class="mb-2">ชำระ <b>${checked.length}</b> บิล · จุด <b>${checked[0].dataset.stationName}</b><br>รวม <b style="color:#34d399;font-size:1.4rem">฿${baht(total)}</b></div>`
           + `<div style="text-align:left">`
           + `  <label class="form-label mb-1" style="color:#97a3bd"><i class="bi bi-cash-coin"></i> เงินสด</label>`
           + `  <input id="swalCash" type="number" min="0" step="0.01" class="swal2-input mt-0" style="margin:0 0 10px;width:100%" value="${total}">`
@@ -188,4 +272,5 @@ async function confirmSettle() {
 }
 </script>
 @endpush
+@endif
 @endsection

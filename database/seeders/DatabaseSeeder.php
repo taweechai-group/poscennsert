@@ -17,8 +17,8 @@ class DatabaseSeeder extends Seeder
     {
         // ---------- Event ตัวอย่าง ----------
         $event = Event::create([
-            'name' => 'คอนเสิร์ต Rock Fest 2026',
-            'location' => 'อิมแพ็ค อารีน่า เมืองทองธานี',
+            'name' => 'คอนเสิร์ต แอน อรดี & ปู พงษ์สิทธิ์',
+            'location' => 'ลานบิ๊กซี ศรีสะเกษ',
             'event_date' => now()->toDateString(),
             'status' => 'active',
         ]);

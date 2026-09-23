@@ -23,13 +23,13 @@ class RequisitionController extends Controller
 
         $query = Requisition::where('event_id', $eventId)
             ->with('items.product', 'fromStation', 'toStation', 'requester')
-            ->latest();
+            ->latest('id');
 
         if ($user->isCashier()) {
             $query->where('to_station_id', $user->station_id);
         }
 
-        $requisitions = $query->get();
+        $requisitions = $query->paginate(30)->withQueryString();
 
         // สำหรับฟอร์มขอเบิก (ฝั่ง POS)
         $products = Product::where('event_id', $eventId)->where('is_active', true)->orderBy('sort_order')->get();
@@ -40,11 +40,22 @@ class RequisitionController extends Controller
     /** POS ขอเบิกจากคลังกลาง */
     public function store(Request $request)
     {
+        // ฟอร์มส่งมาทุกสินค้ารวมทั้งตัวที่กรอก 0 — คัดเฉพาะตัวที่ขอจริงก่อน validate
+        $request->merge([
+            'items' => collect($request->input('items', []))
+                ->filter(fn ($i) => (int) ($i['quantity'] ?? 0) > 0)
+                ->values()
+                ->all(),
+        ]);
+
         $data = $request->validate([
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
             'note' => 'nullable|string|max:255',
+        ], [
+            'items.required' => 'กรุณาระบุจำนวนที่ต้องการเบิกอย่างน้อย 1 รายการ',
+            'items.min' => 'กรุณาระบุจำนวนที่ต้องการเบิกอย่างน้อย 1 รายการ',
         ]);
 
         $user = Auth::user();

@@ -23,6 +23,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/pos/checkout', [PosController::class, 'checkout'])->name('pos.checkout');
         Route::get('/pos/receipt/{sale}', [PosController::class, 'receipt'])->name('pos.receipt');
         Route::get('/pos/sales', [PosController::class, 'sales'])->name('pos.sales');
+        Route::post('/pos/sales/{sale}/void', [PosController::class, 'void'])->name('pos.sales.void');
+        Route::put('/pos/sales/{sale}/payment', [PosController::class, 'updatePayment'])->name('pos.sales.payment');
     });
 
     // ---------- เบิกสินค้า ----------
@@ -43,11 +45,21 @@ Route::middleware('auth')->group(function () {
     });
 
     // ---------- เชียร์เบียร์ / เครดิต ----------
-    Route::get('/sellers', [SellerController::class, 'index'])->name('sellers.index');
-    Route::post('/sellers', [SellerController::class, 'store'])->name('sellers.store');
-    Route::get('/sellers/{seller}', [SellerController::class, 'show'])->name('sellers.show');
-    Route::put('/sellers/{seller}', [SellerController::class, 'update'])->name('sellers.update');
-    Route::post('/sellers/{seller}/pay', [SellerController::class, 'pay'])->name('sellers.pay');
+    // POS (แคชเชียร์) ดูได้ + รับชำระได้อย่างเดียว — เพิ่ม/แก้ไขข้อมูลเป็นงานแอดมิน
+    Route::middleware('role:cashier,admin')->group(function () {
+        Route::get('/sellers', [SellerController::class, 'index'])->name('sellers.index');
+        Route::get('/sellers/{seller}', [SellerController::class, 'show'])->name('sellers.show');
+    });
+
+    // รับชำระเครดิต — แคชเชียร์ที่จุดขายเท่านั้น (เงินต้องเข้าลิ้นชักจุดนั้นจริง)
+    Route::post('/sellers/{seller}/pay', [SellerController::class, 'pay'])
+        ->middleware('role:cashier')->name('sellers.pay');
+
+    // จัดการข้อมูลเชียร์เบียร์ (เพิ่ม/แก้ไข/ตั้งวงเงิน) — แอดมินเท่านั้น
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/sellers', [SellerController::class, 'store'])->name('sellers.store');
+        Route::put('/sellers/{seller}', [SellerController::class, 'update'])->name('sellers.update');
+    });
 
     // ---------- Admin ----------
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
