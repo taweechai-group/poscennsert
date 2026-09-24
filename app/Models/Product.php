@@ -10,6 +10,7 @@ class Product extends Model
 {
     protected $fillable = [
         'event_id', 'name', 'sku', 'unit', 'price', 'cost',
+        'is_returnable', 'total_cost',
         'image', 'icon', 'color', 'sort_order', 'is_active',
     ];
 
@@ -22,6 +23,8 @@ class Product extends Model
     protected $casts = [
         'price' => 'decimal:2',
         'cost' => 'decimal:2',
+        'total_cost' => 'decimal:2',
+        'is_returnable' => 'boolean',
         'is_active' => 'boolean',
     ];
 

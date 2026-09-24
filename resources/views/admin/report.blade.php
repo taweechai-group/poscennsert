@@ -19,11 +19,83 @@
 
         {{-- ยอดขายรวม --}}
         <div class="row g-3 mb-4">
-            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">ยอดขายรวม</div><div class="fs-4 fw-bold" style="color:#a5b4fc">฿{{ number_format($summary['total'],0) }}</div></div></div>
-            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">เงินสด (รวมเก็บคืน)</div><div class="fs-4 fw-bold text-success">฿{{ number_format($summary['cash'],0) }}</div></div></div>
-            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">เงินโอน (รวมเก็บคืน)</div><div class="fs-4 fw-bold text-info">฿{{ number_format($summary['transfer'],0) }}</div></div></div>
-            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">เครดิตค้างชำระ</div><div class="fs-4 fw-bold {{ $summary['credit'] > 0 ? 'text-warning' : 'text-success' }}">฿{{ number_format($summary['credit'],0) }}</div></div></div>
+            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">ยอดขายรวม</div><div class="fs-4 fw-bold" style="color:#a5b4fc">{{ number_format($summary['total'],0) }}</div></div></div>
+            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">เงินสด (รวมเก็บคืน)</div><div class="fs-4 fw-bold text-success">{{ number_format($summary['cash'],0) }}</div></div></div>
+            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">เงินโอน (รวมเก็บคืน)</div><div class="fs-4 fw-bold text-info">{{ number_format($summary['transfer'],0) }}</div></div></div>
+            <div class="col-6 col-md"><div class="card p-3 text-center"><div class="small text-dim">เครดิตค้างชำระ</div><div class="fs-4 fw-bold {{ $summary['credit'] > 0 ? 'text-warning' : 'text-success' }}">{{ number_format($summary['credit'],0) }}</div></div></div>
             <div class="col-12 col-md"><div class="card p-3 text-center"><div class="small text-dim">จำนวนบิล</div><div class="fs-4 fw-bold">{{ number_format($summary['bills']) }}</div></div></div>
+        </div>
+
+        {{-- กำไร --}}
+        <h6 class="mb-2"><i class="bi bi-cash-coin text-success"></i> กำไร</h6>
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                    <div class="small text-dim">ยอดขายรวม</div>
+                    <div class="fs-4 fw-bold" style="color:#a5b4fc">{{ number_format($profit['total_revenue'],0) }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                    <div class="small text-dim">ต้นทุนรวม</div>
+                    <div class="fs-4 fw-bold text-danger">{{ number_format($profit['total_cost'],0) }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                    <div class="small text-dim">กำไรของคืนได้<div class="text-muted">น้ำ / เบียร์</div></div>
+                    <div class="fs-5 fw-bold text-success">{{ number_format($profit['returnable_profit'],0) }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card p-3 text-center">
+                    <div class="small text-dim">กำไรของคืนไม่ได้<div class="text-muted">น้ำแข็ง</div></div>
+                    <div class="fs-5 fw-bold {{ $profit['nonreturnable_profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($profit['nonreturnable_profit'],0) }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="card mb-4">
+            <div class="p-3 d-flex justify-content-between align-items-center" style="background:rgba(34,197,94,.08)">
+                <span class="fw-semibold fs-5"><i class="bi bi-cash-stack text-success"></i> กำไรสุทธิ</span>
+                <span class="fw-bold fs-3 {{ $profit['total_profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($profit['total_profit'],0) }}</span>
+            </div>
+            <table class="table table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>สินค้า</th>
+                        <th class="text-end">ขายได้</th>
+                        <th class="text-end">ยอดขาย</th>
+                        <th class="text-end">ต้นทุน</th>
+                        <th class="text-end">กำไร</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($profit['items'] as $it)
+                        <tr>
+                            <td>
+                                {{ $it['name'] }}
+                                @unless($it['is_returnable'])
+                                    <span class="badge bg-info-subtle text-info-emphasis" title="คิดต้นทุนทั้งก้อน (ของเหลือละลายทิ้ง)"><i class="bi bi-snow"></i> คืนไม่ได้</span>
+                                @endunless
+                            </td>
+                            <td class="text-end">{{ number_format($it['qty']) }} {{ $it['unit'] }}</td>
+                            <td class="text-end">{{ number_format($it['revenue'],0) }}</td>
+                            <td class="text-end text-danger">{{ number_format($it['cost'],0) }}</td>
+                            <td class="text-end fw-bold {{ $it['profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($it['profit'],0) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="text-center text-muted py-3">ยังไม่มีข้อมูล</td></tr>
+                    @endforelse
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td class="text-end" colspan="2">รวม</td>
+                        <td class="text-end">{{ number_format($profit['total_revenue'],0) }}</td>
+                        <td class="text-end text-danger">{{ number_format($profit['total_cost'],0) }}</td>
+                        <td class="text-end {{ $profit['total_profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($profit['total_profit'],0) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
 
         {{-- ยอดขายแยกตามจุดขาย --}}
@@ -45,10 +117,10 @@
                         <tr>
                             <td>{{ $st->station->name ?? '-' }}</td>
                             <td class="text-end">{{ number_format($st->bills) }}</td>
-                            <td class="text-end text-success">฿{{ number_format($st->cash,0) }}</td>
-                            <td class="text-end text-info">฿{{ number_format($st->transfer,0) }}</td>
-                            <td class="text-end {{ $st->credit > 0 ? 'text-warning fw-bold' : 'text-success' }}">฿{{ number_format($st->credit,0) }}</td>
-                            <td class="text-end fw-bold">฿{{ number_format($st->total,0) }}</td>
+                            <td class="text-end text-success">{{ number_format($st->cash,0) }}</td>
+                            <td class="text-end text-info">{{ number_format($st->transfer,0) }}</td>
+                            <td class="text-end {{ $st->credit > 0 ? 'text-warning fw-bold' : 'text-success' }}">{{ number_format($st->credit,0) }}</td>
+                            <td class="text-end fw-bold">{{ number_format($st->total,0) }}</td>
                         </tr>
                     @empty
                         <tr><td colspan="6" class="text-center text-muted py-3">ยังไม่มีข้อมูล</td></tr>
@@ -58,10 +130,10 @@
                     <tr class="fw-bold">
                         <td class="text-end">รวมทุกจุด</td>
                         <td class="text-end">{{ number_format($byStation->sum('bills')) }}</td>
-                        <td class="text-end text-success">฿{{ number_format($byStation->sum('cash'),0) }}</td>
-                        <td class="text-end text-info">฿{{ number_format($byStation->sum('transfer'),0) }}</td>
-                        <td class="text-end {{ $byStation->sum('credit') > 0 ? 'text-warning' : 'text-success' }}">฿{{ number_format($byStation->sum('credit'),0) }}</td>
-                        <td class="text-end">฿{{ number_format($byStation->sum('total'),0) }}</td>
+                        <td class="text-end text-success">{{ number_format($byStation->sum('cash'),0) }}</td>
+                        <td class="text-end text-info">{{ number_format($byStation->sum('transfer'),0) }}</td>
+                        <td class="text-end {{ $byStation->sum('credit') > 0 ? 'text-warning' : 'text-success' }}">{{ number_format($byStation->sum('credit'),0) }}</td>
+                        <td class="text-end">{{ number_format($byStation->sum('total'),0) }}</td>
                     </tr>
                 </tfoot>
             </table>
@@ -76,14 +148,14 @@
                     <div class="card p-3 h-100">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="fw-semibold">{{ $st->station->name ?? '-' }}</span>
-                            <span class="fw-bold" style="color:#a5b4fc">฿{{ number_format($st->total,0) }}</span>
+                            <span class="fw-bold" style="color:#a5b4fc">{{ number_format($st->total,0) }}</span>
                         </div>
                         @forelse($items as $it)
                             <div class="d-flex justify-content-between border-bottom py-1">
                                 <span>{{ $it->product_name }}
                                     <small class="text-muted">× {{ number_format($it->qty) }}</small>
                                 </span>
-                                <b>฿{{ number_format($it->total,0) }}</b>
+                                <b>{{ number_format($it->total,0) }}</b>
                             </div>
                         @empty
                             <div class="text-muted small py-2">ยังไม่มีการขาย</div>
@@ -104,10 +176,10 @@
                     @forelse($sellers as $s)
                         <tr>
                             <td>{{ $s->code }}</td><td>{{ $s->name }}</td>
-                            <td class="text-end">฿{{ number_format($s->sales_total,0) }}</td>
+                            <td class="text-end">{{ number_format($s->sales_total,0) }}</td>
                             <td class="text-end">{{ rtrim(rtrim(number_format($s->commission_rate,2),'0'),'.') }}%</td>
-                            <td class="text-end fw-bold text-info">฿{{ number_format($s->commission,2) }}</td>
-                            <td class="text-end {{ $s->outstanding > 0 ? 'text-danger fw-bold' : 'text-muted' }}">฿{{ number_format($s->outstanding,0) }}</td>
+                            <td class="text-end fw-bold text-info">{{ number_format($s->commission,2) }}</td>
+                            <td class="text-end {{ $s->outstanding > 0 ? 'text-danger fw-bold' : 'text-muted' }}">{{ number_format($s->outstanding,0) }}</td>
                         </tr>
                     @empty
                         <tr><td colspan="6" class="text-center text-muted py-3">ไม่มีข้อมูล</td></tr>
@@ -116,8 +188,8 @@
                 <tfoot class="table-light">
                     <tr class="fw-bold">
                         <td colspan="4" class="text-end">รวมคอมมิชชั่น</td>
-                        <td class="text-end text-info">฿{{ number_format($sellers->sum('commission'),2) }}</td>
-                        <td class="text-end text-danger">฿{{ number_format($sellers->sum('outstanding'),0) }}</td>
+                        <td class="text-end text-info">{{ number_format($sellers->sum('commission'),2) }}</td>
+                        <td class="text-end text-danger">{{ number_format($sellers->sum('outstanding'),0) }}</td>
                     </tr>
                 </tfoot>
             </table>

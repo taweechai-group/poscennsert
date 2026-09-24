@@ -31,6 +31,7 @@
                 $pData = [
                     'id' => $p->id, 'name' => $p->name, 'unit' => $p->unit,
                     'price' => $p->price, 'cost' => $p->cost, 'icon' => $p->icon, 'color' => $p->color,
+                    'is_returnable' => $p->is_returnable, 'total_cost' => $p->total_cost,
                 ];
             @endphp
             <div class="col-6 col-md-4 col-lg-3">
@@ -42,9 +43,17 @@
                             <i class="bi {{ $p->icon }}" style="color:{{ $p->color }}"></i>
                         @endif
                     </div>
-                    <div class="fw-semibold fs-5">{{ $p->name }}</div>
+                    <div class="fw-semibold fs-5">{{ $p->name }}
+                        @unless($p->is_returnable)
+                            <span class="badge bg-info-subtle text-info-emphasis" title="คืนของไม่ได้ — คิดกำไรจากทุนรวม"><i class="bi bi-snow"></i> คืนไม่ได้</span>
+                        @endunless
+                    </div>
                     <div class="mb-1"><span class="fw-bold fs-4" style="color:{{ $p->color }}">฿{{ number_format($p->price,0) }}</span> <small class="text-dim">/ {{ $p->unit }}</small></div>
-                    <small class="text-dim">ต้นทุน ฿{{ number_format($p->cost,0) }}</small>
+                    @if($p->is_returnable)
+                        <small class="text-dim">ต้นทุน ฿{{ number_format($p->cost,0) }} / {{ $p->unit }}</small>
+                    @else
+                        <small class="text-dim">ทุนรวม ฿{{ number_format($p->total_cost,0) }}</small>
+                    @endif
                     <button class="btn btn-sm btn-outline-light mt-3"
                             onclick="openProduct({{ Js::from($pData) }}, {{ Js::from($p->imageUrl()) }})">
                         <i class="bi bi-pencil"></i> แก้ไข
@@ -80,9 +89,29 @@
                     <div class="col-6 mb-2"><label class="form-label">หน่วย</label><input name="unit" id="pf_unit" class="form-control" placeholder="กระป๋อง" required></div>
                     <div class="col-6 mb-2"><label class="form-label">ราคาขาย</label><input type="number" name="price" id="pf_price" class="form-control" step="0.01" required></div>
                 </div>
-                <div class="row">
-                    <div class="col-6 mb-2"><label class="form-label">ต้นทุน</label><input type="number" name="cost" id="pf_cost" class="form-control" step="0.01" value="0"></div>
+                {{-- ประเภทการคิดกำไร --}}
+                <div class="mb-2 p-2 rounded" style="background:rgba(255,255,255,.03);border:1px solid var(--stroke-2)">
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" name="is_returnable" id="pf_returnable" value="1" checked onchange="toggleCostMode()">
+                        <label class="form-check-label" for="pf_returnable">สินค้าคืนของได้ (น้ำ / เบียร์)</label>
+                    </div>
+                    <small class="text-dim">ติ๊ก = ของเหลือคืนได้ คิดต้นทุนเฉพาะที่ขาย · ไม่ติ๊ก = คืนไม่ได้ (น้ำแข็ง) คิดทุนทั้งก้อน</small>
+                </div>
+
+                {{-- โหมดคืนได้: ต้นทุนต่อหน่วย --}}
+                <div class="row" id="pf_cost_unit_row">
+                    <div class="col-6 mb-2"><label class="form-label">ต้นทุน / หน่วย</label><input type="number" name="cost" id="pf_cost" class="form-control" step="0.01" value="0"></div>
                     <div class="col-6 mb-2"><label class="form-label">สีประจำ</label><input type="color" name="color" id="pf_color" class="form-control form-control-color w-100" value="#6366f1"></div>
+                </div>
+
+                {{-- โหมดคืนไม่ได้: ทุนรวมทั้งก้อน --}}
+                <div class="row d-none" id="pf_cost_total_row">
+                    <div class="col-6 mb-2">
+                        <label class="form-label">ทุนรวมทั้งหมด (บาท)</label>
+                        <input type="number" name="total_cost" id="pf_total_cost" class="form-control" step="0.01" value="0">
+                        <small class="text-dim">ทุนน้ำแข็งที่ซื้อมาทั้งหมด</small>
+                    </div>
+                    <div class="col-6 mb-2"><label class="form-label">สีประจำ</label><input type="color" id="pf_color2" class="form-control form-control-color w-100" value="#6366f1" onchange="pf_color.value=this.value"></div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label">ไอคอน (ใช้เมื่อไม่มีรูป)</label>
@@ -113,15 +142,28 @@ function openProduct(p = null, imageUrl = null) {
         document.getElementById('productModalTitle').textContent = 'แก้ไขสินค้า';
         pf_name.value = p.name; pf_unit.value = p.unit; pf_price.value = p.price;
         pf_cost.value = p.cost; pf_color.value = p.color; pf_icon.value = p.icon;
+        pf_returnable.checked = !!p.is_returnable;
+        pf_total_cost.value = p.total_cost ?? 0;
         showPreview(imageUrl);
     } else {
         form.action = '{{ url('admin/products') }}';
         document.getElementById('productModalTitle').textContent = 'เพิ่มสินค้า';
         form.reset(); pf_icon.value = 'bi-box'; pf_color.value = '#6366f1';
+        pf_returnable.checked = true; pf_total_cost.value = 0;
         showPreview(null);
     }
     document.getElementById('pf_icon_preview').className = 'bi ' + pf_icon.value;
+    document.getElementById('pf_color2').value = pf_color.value;
+    toggleCostMode();
     modal.show();
+}
+
+// สลับ UI ระหว่างโหมดต้นทุน/หน่วย (คืนได้) กับ ทุนรวม (คืนไม่ได้)
+function toggleCostMode() {
+    const returnable = pf_returnable.checked;
+    document.getElementById('pf_cost_unit_row').classList.toggle('d-none', !returnable);
+    document.getElementById('pf_cost_total_row').classList.toggle('d-none', returnable);
+    document.getElementById('pf_color2').value = pf_color.value;
 }
 
 function showPreview(url) {

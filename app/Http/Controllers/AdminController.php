@@ -71,10 +71,17 @@ class AdminController extends Controller
             'unit' => 'required|string|max:20',
             'price' => 'required|numeric|min:0',
             'cost' => 'nullable|numeric|min:0',
+            'is_returnable' => 'nullable|boolean',        // คืนของได้ไหม (น้ำ/เบียร์ = ได้, น้ำแข็ง = ไม่ได้)
+            'total_cost' => 'nullable|numeric|min:0',      // ทุนรวมที่ลงไป (สำหรับสินค้าคืนไม่ได้)
             'icon' => 'nullable|string|max:40',
             'color' => 'nullable|string|max:20',
             'image' => 'nullable|image|max:4096', // อัปโหลดรูป สูงสุด 4MB
         ]);
+
+        // checkbox ไม่ติ๊ก = ไม่ส่งค่ามา → ถือว่าคืนของได้ (true)
+        $data['is_returnable'] = $request->boolean('is_returnable');
+        // ทุนรวมมีความหมายเฉพาะสินค้าคืนไม่ได้ ถ้าคืนได้บังคับเป็น 0 กันข้อมูลค้าง
+        $data['total_cost'] = $data['is_returnable'] ? 0 : ($data['total_cost'] ?? 0);
 
         // อัปโหลดรูปสินค้า (ถ้ามี)
         if ($request->hasFile('image')) {
@@ -251,9 +258,89 @@ class AdminController extends Controller
             ->get()
             ->groupBy(fn ($s) => $s->station->name);
 
+        // ---------- กำไร แยกตามประเภทสินค้า ----------
+        $profit = $this->profitReport($event->id);
+
         return view('admin.report', compact(
-            'event', 'summary', 'sellers', 'stockLeft', 'byStation', 'stationProducts'
+            'event', 'summary', 'sellers', 'stockLeft', 'byStation', 'stationProducts', 'profit'
         ));
+    }
+
+    /**
+     * รายงานกำไรแยกตามประเภทสินค้า
+     *
+     * สินค้าคืนของได้ (น้ำ/เบียร์): ของเหลือคืนได้ ต้นทุนคิดเฉพาะที่ขายจริง
+     *   กำไร = ยอดขาย − (cost/หน่วย × จำนวนที่ขาย)
+     *
+     * สินค้าคืนไม่ได้ (น้ำแข็ง): ของเหลือละลายทิ้ง ต้นทุนคิดทั้งก้อน
+     *   กำไร = ยอดขาย − total_cost (ทุนรวมที่แอดมินกรอก)
+     *
+     * @return array{items: array, returnable_profit: float, nonreturnable_profit: float, total_profit: float, total_revenue: float, total_cost: float}
+     */
+    private function profitReport(int $eventId): array
+    {
+        // ยอดขายรวม (qty + subtotal) ต่อสินค้า จากบิลที่ completed เท่านั้น
+        $sold = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->where('sales.event_id', $eventId)
+            ->where('sales.status', 'completed')
+            ->selectRaw('sale_items.product_id')
+            ->selectRaw('SUM(sale_items.quantity) as qty')
+            ->selectRaw('SUM(sale_items.subtotal) as revenue')
+            ->groupBy('sale_items.product_id')
+            ->get()
+            ->keyBy('product_id');
+
+        $items = [];
+        $returnableProfit = 0.0;
+        $nonReturnableProfit = 0.0;
+        $totalRevenue = 0.0;
+        $totalCost = 0.0;
+
+        // ไล่ทุกสินค้าในงาน (รวมที่ยังไม่ขาย เพื่อให้เห็นน้ำแข็งที่ลงทุนแต่ยังขายไม่ได้ = ติดลบ)
+        $products = Product::where('event_id', $eventId)->orderBy('sort_order')->get();
+
+        foreach ($products as $p) {
+            $row = $sold->get($p->id);
+            $qty = (int) ($row->qty ?? 0);
+            $revenue = (float) ($row->revenue ?? 0);
+
+            if ($p->is_returnable) {
+                // คืนได้: ต้นทุน = cost/หน่วย × จำนวนที่ขาย
+                $cost = (float) $p->cost * $qty;
+                $returnableProfit += $revenue - $cost;
+            } else {
+                // คืนไม่ได้: ต้นทุน = ทุนรวมทั้งก้อน (ไม่ว่าจะขายหมดหรือไม่)
+                $cost = (float) $p->total_cost;
+                $nonReturnableProfit += $revenue - $cost;
+            }
+
+            // ข้ามสินค้าที่ไม่มีทั้งยอดขายและทุน (ไม่มีอะไรให้รายงาน)
+            if ($qty === 0 && $cost == 0.0) {
+                continue;
+            }
+
+            $totalRevenue += $revenue;
+            $totalCost += $cost;
+
+            $items[] = [
+                'name' => $p->name,
+                'unit' => $p->unit,
+                'is_returnable' => $p->is_returnable,
+                'qty' => $qty,
+                'revenue' => $revenue,
+                'cost' => $cost,
+                'profit' => $revenue - $cost,
+            ];
+        }
+
+        return [
+            'items' => $items,
+            'returnable_profit' => $returnableProfit,
+            'nonreturnable_profit' => $nonReturnableProfit,
+            'total_profit' => $returnableProfit + $nonReturnableProfit,
+            'total_revenue' => $totalRevenue,
+            'total_cost' => $totalCost,
+        ];
     }
 
     /**
