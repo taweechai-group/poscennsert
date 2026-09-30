@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>ใบเสร็จ {{ $sale->bill_no }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="{{ asset('vendor/fonts/kanit.css') }}" rel="stylesheet">
     <style>
         * { font-family: 'Kanit', sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
         body { background: #f1f3f7; padding: 20px; }
