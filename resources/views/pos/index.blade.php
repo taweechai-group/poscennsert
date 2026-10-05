@@ -355,7 +355,7 @@ async function checkout(type) {
 
     const change = paid - total;
     let detail = '';
-    if (type === 'cash') detail = `<br>รับ ฿${baht(paid)}<br><b style="color:#34d399;font-size:1.3rem">ทอน ฿${baht(change)}</b>`;
+    if (type === 'cash') detail = `<br>รับ ฿${baht(paid)}<div class="text-dim mt-2">เงินทอน</div><div style="color:#34d399;font-size:4rem;font-weight:800;line-height:1.1">${baht(change)}</div>`;
     else if (type === 'transfer') detail = '<br><span style="color:#22d3ee">ชำระด้วยเงินโอน</span>';
     else if (type === 'split') detail = `<br><span style="color:#a5b4fc">เงินสด ฿${baht(cashAmount)} + เงินโอน ฿${baht(transferAmount)}</span>`;
     else detail = '<br><span style="color:#fbbf24">ลงเครดิตแล้ว</span>';
