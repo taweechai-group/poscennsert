@@ -204,6 +204,8 @@
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}"><i class="bi bi-speedometer2"></i> ภาพรวม</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.products') ? 'active' : '' }}" href="{{ route('admin.products') }}"><i class="bi bi-box"></i> สินค้า</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.stations') ? 'active' : '' }}" href="{{ route('admin.stations') }}"><i class="bi bi-shop"></i> จุดขาย</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('warehouse.index') ? 'active' : '' }}" href="{{ route('warehouse.index') }}"><i class="bi bi-boxes"></i> สต๊อกกลาง</a></li>
+                        <li class="nav-item"><a class="nav-link {{ request()->routeIs('warehouse.movements') ? 'active' : '' }}" href="{{ route('warehouse.movements') }}"><i class="bi bi-arrow-left-right"></i> การเคลื่อนไหว</a></li>
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('admin.users') ? 'active' : '' }}" href="{{ route('admin.users') }}"><i class="bi bi-people"></i> พนักงาน</a></li>
                         {{-- จัดการเชียร์เบียร์ (เพิ่ม/แก้ไข/ตั้งวงเงิน) เป็นงานแอดมิน --}}
                         <li class="nav-item"><a class="nav-link {{ request()->routeIs('sellers.*') ? 'active' : '' }}" href="{{ route('sellers.index') }}"><i class="bi bi-person-badge"></i> จัดการเชียร์เบียร์</a></li>

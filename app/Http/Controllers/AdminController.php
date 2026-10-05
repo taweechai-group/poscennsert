@@ -267,6 +267,55 @@ class AdminController extends Controller
     }
 
     /**
+     * บิลขายรายใบของจุดขายหนึ่ง พร้อมกำไรต่อบิล (ทั้งงาน)
+     *
+     * กำไรต่อบิล = Σ(กำไรของรายการคืนได้) = subtotal − (ต้นทุน ณ ตอนขาย × จำนวน)
+     * ** ไม่รวมทุนจมน้ำแข็ง (คืนไม่ได้) ** เพราะน้ำแข็งคิดทุนทั้งก้อน เฉลี่ยลงรายบิลไม่ได้
+     * จึงเรียกว่า "กำไรขั้นต้น" และแยกยอดขายน้ำแข็งให้เห็นต่างหาก
+     */
+    public function stationSales(Station $station)
+    {
+        $event = $this->currentEvent();
+        abort_unless($station->event_id === $event->id, 404);
+
+        $sales = Sale::where('station_id', $station->id)
+            ->where('event_id', $event->id)
+            ->where('status', 'completed')
+            ->with(['items', 'seller'])
+            ->latest('id')
+            ->get();
+
+        // คำนวณกำไรขั้นต้นต่อบิล (เฉพาะรายการคืนได้ที่มีต้นทุนต่อหน่วย)
+        $totalRevenue = 0.0;
+        $totalGrossProfit = 0.0;
+        foreach ($sales as $sale) {
+            $revenue = 0.0;
+            $cost = 0.0;
+            foreach ($sale->items as $item) {
+                $revenue += (float) $item->subtotal;
+                // cost ถูก snapshot ไว้เฉพาะของคืนได้ (น้ำแข็ง = null → ไม่คิดต้นทุนต่อบิล)
+                if ($item->cost !== null) {
+                    $cost += (float) $item->cost * (int) $item->quantity;
+                }
+            }
+            $sale->bill_cost = $cost;
+            $sale->bill_profit = $revenue - $cost;
+
+            $totalRevenue += $revenue;
+            $totalGrossProfit += $sale->bill_profit;
+        }
+
+        $stat = [
+            'bills' => $sales->count(),
+            'revenue' => $totalRevenue,
+            'cost' => $totalRevenue - $totalGrossProfit,
+            'gross_profit' => $totalGrossProfit,
+        ];
+
+        return view('admin.station-sales', compact('event', 'station', 'sales', 'stat'));
+    }
+
+    /**
      * รายงานกำไรแยกตามประเภทสินค้า
      *
      * สินค้าคืนของได้ (น้ำ/เบียร์): ของเหลือคืนได้ ต้นทุนคิดเฉพาะที่ขายจริง
@@ -279,13 +328,19 @@ class AdminController extends Controller
      */
     private function profitReport(int $eventId): array
     {
-        // ยอดขายรวม (qty + subtotal) ต่อสินค้า จากบิลที่ completed เท่านั้น
+        // ยอดขายรวม (qty + subtotal + ต้นทุนขายจริง) ต่อสินค้า จากบิลที่ completed เท่านั้น
+        //
+        // cogs = ต้นทุนขาย = Σ(ต้นทุน/หน่วย ณ ตอนขาย × จำนวน) — ใช้ cost ที่ snapshot ไว้ใน sale_items
+        // บิลเก่าก่อนมีฟีเจอร์นี้ (sale_items.cost = null) → fallback เป็น products.cost ปัจจุบัน
+        // ค่านี้ใช้เฉพาะสินค้าคืนได้ ส่วนน้ำแข็ง/คืนไม่ได้คิดต้นทุนทั้งก้อนจาก total_cost จึงไม่พึ่ง cogs
         $sold = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->join('products', 'products.id', '=', 'sale_items.product_id')
             ->where('sales.event_id', $eventId)
             ->where('sales.status', 'completed')
             ->selectRaw('sale_items.product_id')
             ->selectRaw('SUM(sale_items.quantity) as qty')
             ->selectRaw('SUM(sale_items.subtotal) as revenue')
+            ->selectRaw('SUM(COALESCE(sale_items.cost, products.cost) * sale_items.quantity) as cogs')
             ->groupBy('sale_items.product_id')
             ->get()
             ->keyBy('product_id');
@@ -305,8 +360,9 @@ class AdminController extends Controller
             $revenue = (float) ($row->revenue ?? 0);
 
             if ($p->is_returnable) {
-                // คืนได้: ต้นทุน = cost/หน่วย × จำนวนที่ขาย
-                $cost = (float) $p->cost * $qty;
+                // คืนได้: ต้นทุน = ต้นทุน/หน่วย ณ ตอนขายจริง × จำนวน (snapshot ไว้ใน sale_items)
+                // ไม่ใช้ cost ปัจจุบัน เพื่อไม่ให้บิลเก่าถูกคิดต้นทุนใหม่ย้อนหลังเมื่อรับของล็อตใหม่ราคาต่าง
+                $cost = (float) ($row->cogs ?? 0);
                 $returnableProfit += $revenue - $cost;
             } else {
                 // คืนไม่ได้: ต้นทุน = ทุนรวมทั้งก้อน (ไม่ว่าจะขายหมดหรือไม่)

@@ -8,11 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SaleItem extends Model
 {
     protected $fillable = [
-        'sale_id', 'product_id', 'product_name', 'price', 'quantity', 'subtotal',
+        'sale_id', 'product_id', 'product_name', 'price', 'cost', 'quantity', 'subtotal',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
+        'cost' => 'decimal:2',
         'subtotal' => 'decimal:2',
     ];
 

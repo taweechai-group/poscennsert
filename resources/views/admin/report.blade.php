@@ -28,29 +28,52 @@
 
         {{-- กำไร --}}
         <h6 class="mb-2"><i class="bi bi-cash-coin text-success"></i> กำไร</h6>
+
+        {{-- สมการกำไรแบบเห็นภาพ: ยอดขาย − ต้นทุน = กำไรสุทธิ --}}
+        @php
+            $margin = $profit['total_revenue'] > 0
+                ? $profit['total_profit'] / $profit['total_revenue'] * 100 : 0;
+        @endphp
+        <div class="card mb-3">
+            <div class="row g-0 text-center align-items-stretch">
+                <div class="col">
+                    <div class="p-3 h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-dim">ยอดขายรวม</div>
+                        <div class="fs-4 fw-bold" style="color:#a5b4fc">{{ number_format($profit['total_revenue'],0) }}</div>
+                    </div>
+                </div>
+                <div class="col-auto d-flex align-items-center"><span class="fs-3 text-muted px-1">−</span></div>
+                <div class="col">
+                    <div class="p-3 h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-dim">ต้นทุนรวม</div>
+                        <div class="fs-4 fw-bold text-danger">{{ number_format($profit['total_cost'],0) }}</div>
+                    </div>
+                </div>
+                <div class="col-auto d-flex align-items-center"><span class="fs-3 text-muted px-1">=</span></div>
+                <div class="col" style="background:rgba(34,197,94,.10)">
+                    <div class="p-3 h-100 d-flex flex-column justify-content-center">
+                        <div class="small text-dim">กำไรสุทธิ</div>
+                        <div class="fs-3 fw-bold {{ $profit['total_profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($profit['total_profit'],0) }}</div>
+                        <div class="small {{ $margin >= 0 ? 'text-success' : 'text-danger' }}">อัตรากำไร {{ number_format($margin,1) }}%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- กำไรแยกตามประเภทสินค้า (คิดต้นทุนคนละแบบ) --}}
         <div class="row g-3 mb-3">
-            <div class="col-6 col-md-3">
-                <div class="card p-3 text-center">
-                    <div class="small text-dim">ยอดขายรวม</div>
-                    <div class="fs-4 fw-bold" style="color:#a5b4fc">{{ number_format($profit['total_revenue'],0) }}</div>
+            <div class="col-6">
+                <div class="card p-3 text-center h-100">
+                    <div class="small text-dim">กำไรของคืนได้ <span class="text-muted">(น้ำ / เบียร์)</span></div>
+                    <div class="fs-5 fw-bold {{ $profit['returnable_profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($profit['returnable_profit'],0) }}</div>
+                    <div class="small text-muted"><i class="bi bi-info-circle"></i> ต้นทุนคิดตามที่ขายจริง × ต้นทุน ณ ตอนขาย</div>
                 </div>
             </div>
-            <div class="col-6 col-md-3">
-                <div class="card p-3 text-center">
-                    <div class="small text-dim">ต้นทุนรวม</div>
-                    <div class="fs-4 fw-bold text-danger">{{ number_format($profit['total_cost'],0) }}</div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card p-3 text-center">
-                    <div class="small text-dim">กำไรของคืนได้<div class="text-muted">น้ำ / เบียร์</div></div>
-                    <div class="fs-5 fw-bold text-success">{{ number_format($profit['returnable_profit'],0) }}</div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="card p-3 text-center">
-                    <div class="small text-dim">กำไรของคืนไม่ได้<div class="text-muted">น้ำแข็ง</div></div>
+            <div class="col-6">
+                <div class="card p-3 text-center h-100">
+                    <div class="small text-dim">กำไรของคืนไม่ได้ <span class="text-muted">(น้ำแข็ง)</span></div>
                     <div class="fs-5 fw-bold {{ $profit['nonreturnable_profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($profit['nonreturnable_profit'],0) }}</div>
+                    <div class="small text-muted"><i class="bi bi-snow"></i> คิดทุนจมทั้งก้อน (ของเหลือละลายทิ้ง)</div>
                 </div>
             </div>
         </div>
@@ -67,10 +90,12 @@
                         <th class="text-end">ยอดขาย</th>
                         <th class="text-end">ต้นทุน</th>
                         <th class="text-end">กำไร</th>
+                        <th class="text-end">%</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($profit['items'] as $it)
+                        @php $m = $it['revenue'] > 0 ? $it['profit'] / $it['revenue'] * 100 : null; @endphp
                         <tr>
                             <td>
                                 {{ $it['name'] }}
@@ -82,9 +107,10 @@
                             <td class="text-end">{{ number_format($it['revenue'],0) }}</td>
                             <td class="text-end text-danger">{{ number_format($it['cost'],0) }}</td>
                             <td class="text-end fw-bold {{ $it['profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($it['profit'],0) }}</td>
+                            <td class="text-end small {{ ($m ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">{{ $m === null ? '-' : number_format($m,0).'%' }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="text-center text-muted py-3">ยังไม่มีข้อมูล</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-3">ยังไม่มีข้อมูล</td></tr>
                     @endforelse
                 </tbody>
                 <tfoot class="table-light">
@@ -93,6 +119,7 @@
                         <td class="text-end">{{ number_format($profit['total_revenue'],0) }}</td>
                         <td class="text-end text-danger">{{ number_format($profit['total_cost'],0) }}</td>
                         <td class="text-end {{ $profit['total_profit'] >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($profit['total_profit'],0) }}</td>
+                        <td class="text-end {{ $margin >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($margin,0) }}%</td>
                     </tr>
                 </tfoot>
             </table>
@@ -115,7 +142,13 @@
                 <tbody>
                     @forelse($byStation as $st)
                         <tr>
-                            <td>{{ $st->station->name ?? '-' }}</td>
+                            <td>
+                                @if($st->station)
+                                    <a href="{{ route('admin.report.station', $st->station) }}" class="text-decoration-none">
+                                        {{ $st->station->name }} <i class="bi bi-box-arrow-up-right small"></i>
+                                    </a>
+                                @else - @endif
+                            </td>
                             <td class="text-end">{{ number_format($st->bills) }}</td>
                             <td class="text-end text-success">{{ number_format($st->cash,0) }}</td>
                             <td class="text-end text-info">{{ number_format($st->transfer,0) }}</td>

@@ -134,19 +134,25 @@ class PosController extends Controller
 
                 foreach ($data['items'] as $item) {
                     $p = $products[$item['product_id']];
+                    // ต้นทุน/หน่วย ณ เวลาขาย — เฉพาะสินค้าคืนได้ (คิด cost × qty)
+                    // น้ำแข็ง/คืนไม่ได้ = คิดต้นทุนทั้งก้อนจาก total_cost → ไม่เก็บต้นทุนรายชิ้น (null)
+                    $unitCost = $p->is_returnable ? (float) $p->cost : null;
+
                     SaleItem::create([
                         'sale_id' => $sale->id,
                         'product_id' => $p->id,
                         'product_name' => $p->name,
                         'price' => $p->price,
+                        'cost' => $unitCost, // Snapshot ต้นทุน ณ เวลาขาย ไว้คิดกำไรไม่ให้เพี้ยนย้อนหลัง
                         'quantity' => $item['quantity'],
                         'subtotal' => $p->price * $item['quantity'],
                     ]);
 
-                    // ตัดสต๊อกจุดขาย
+                    // ตัดสต๊อกจุดขาย (บันทึกต้นทุน/หน่วยลง movement ด้วย เพื่อให้แอดมินเห็นในประวัติ)
                     $this->stock->adjust(
                         $eventId, $station->id, $p->id, -$item['quantity'],
                         'sale', 'sale', $sale->id, $user->id, "บิล {$sale->bill_no}",
+                        $unitCost,
                     );
                 }
 

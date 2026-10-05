@@ -71,5 +71,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/users', [AdminController::class, 'users'])->name('users');
         Route::post('/users', [AdminController::class, 'saveUser'])->name('users.save');
         Route::get('/report', [AdminController::class, 'report'])->name('report');
+        Route::get('/report/station/{station}', [AdminController::class, 'stationSales'])->name('report.station');
     });
 });
