@@ -24,6 +24,7 @@ class StockService
         ?int $refId = null,
         ?int $userId = null,
         ?string $note = null,
+        ?float $unitCost = null,
     ): int {
         $stock = Stock::firstOrCreate(
             ['station_id' => $stationId, 'product_id' => $productId],
@@ -39,6 +40,7 @@ class StockService
             'product_id' => $productId,
             'type' => $type,
             'quantity' => $delta,
+            'unit_cost' => $unitCost,
             'balance_after' => $stock->quantity,
             'ref_type' => $refType,
             'ref_id' => $refId,

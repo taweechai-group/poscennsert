@@ -31,6 +31,18 @@
         @endforeach
     </div>
 
+    {{-- สรุปมูลค่าสินค้าคงเหลือ (เฉพาะของคืนได้) --}}
+    <div class="card card-body mb-3 d-flex flex-row align-items-center justify-content-between flex-wrap gap-2"
+         style="border-left:4px solid #16a34a">
+        <div>
+            <div class="text-dim small"><i class="bi bi-cash-stack text-success"></i> มูลค่าสินค้าคงเหลือ (ทุกจุดรวมกัน)</div>
+            <div class="fs-3 fw-bold text-success">฿{{ number_format($totalStockValue, 0) }}</div>
+        </div>
+        <small class="text-muted" style="max-width:260px">
+            <i class="bi bi-info-circle"></i> คิดเฉพาะสินค้าคืนได้ (คงเหลือ × ต้นทุนเฉลี่ย) — น้ำแข็ง/ของคืนไม่ได้เป็นทุนจม จึงไม่นับมูลค่าคงเหลือ
+        </small>
+    </div>
+
     {{-- ตารางสต๊อกทุกจุด --}}
     <h6 class="mb-2"><i class="bi bi-grid text-secondary"></i> ยอดคงเหลือทุกจุด</h6>
     <div class="card">
@@ -62,6 +74,29 @@
                         </tr>
                     @endforeach
                 </tbody>
+                <tfoot class="table-light">
+                    {{-- จำนวนคงเหลือรวมทุกจุด ต่อสินค้า --}}
+                    <tr>
+                        <td class="text-start fw-semibold"><i class="bi bi-sigma text-secondary"></i> คงเหลือรวม</td>
+                        @foreach($products as $p)
+                            @php $sum = array_sum($matrix[$p->id] ?? []); @endphp
+                            <td class="fw-bold">{{ number_format($sum) }}</td>
+                        @endforeach
+                    </tr>
+                    {{-- มูลค่าคงเหลือ ต่อสินค้า (คืนไม่ได้ = ทุนจม แสดง —) --}}
+                    <tr>
+                        <td class="text-start fw-semibold"><i class="bi bi-cash text-success"></i> มูลค่าคงเหลือ</td>
+                        @foreach($products as $p)
+                            <td class="small {{ $p->is_returnable ? 'text-success' : 'text-muted' }}">
+                                @if($p->is_returnable)
+                                    ฿{{ number_format($stockValue[$p->id] ?? 0, 0) }}
+                                @else
+                                    <span title="ทุนจม ไม่คิดมูลค่าคงเหลือ">—</span>
+                                @endif
+                            </td>
+                        @endforeach
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -79,11 +114,28 @@
             </div>
             <div class="modal-body">
                 <label class="form-label">สินค้า</label>
-                <select name="product_id" class="form-select mb-3" required>
-                    @foreach($products as $p)<option value="{{ $p->id }}">{{ $p->name }} ({{ $p->unit }})</option>@endforeach
+                <select name="product_id" id="rc_product" class="form-select mb-3" required
+                        onchange="rcProductChanged(this)">
+                    @foreach($products as $p)
+                        <option value="{{ $p->id }}"
+                                data-cost="{{ (float) $p->cost }}"
+                                data-returnable="{{ $p->is_returnable ? 1 : 0 }}">
+                            {{ $p->name }} ({{ $p->unit }})
+                        </option>
+                    @endforeach
                 </select>
-                <label class="form-label">จำนวน</label>
-                <input type="number" name="quantity" class="form-control mb-3" min="1" value="1" required>
+                <div class="row g-2 mb-1">
+                    <div class="col-6">
+                        <label class="form-label">จำนวน</label>
+                        <input type="number" name="quantity" class="form-control" min="1" value="1" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">ต้นทุน/หน่วย (บาท)</label>
+                        <input type="number" name="unit_cost" id="rc_unit_cost" class="form-control"
+                               min="0" step="0.01" placeholder="เช่น 60">
+                    </div>
+                </div>
+                <small class="text-muted d-block mb-3" id="rc_cost_hint"></small>
                 <label class="form-label">หมายเหตุ</label>
                 <input type="text" name="note" class="form-control" placeholder="เช่น รับจาก supplier">
             </div>
@@ -105,6 +157,24 @@
 
 @push('scripts')
 <script>
+// แสดงต้นทุนปัจจุบันของสินค้าที่เลือก + บอกว่าจะคิดต้นทุนแบบไหน
+function rcProductChanged(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    const cost = parseFloat(opt.dataset.cost || 0);
+    const returnable = opt.dataset.returnable === '1';
+    const hint = document.getElementById('rc_cost_hint');
+    if (returnable) {
+        hint.innerHTML = `<i class="bi bi-info-circle"></i> ต้นทุนเฉลี่ยปัจจุบัน ฿${cost.toLocaleString()} — กรอกต้นทุนล็อตใหม่เพื่อคำนวณเฉลี่ยถ่วงน้ำหนักให้อัตโนมัติ (เว้นว่าง = ไม่แก้ต้นทุน)`;
+    } else {
+        hint.innerHTML = `<i class="bi bi-info-circle"></i> สินค้าคืนไม่ได้ (ทุนจม) — ต้นทุนล็อตนี้จะถูกบวกเข้าทุนรวมสะสม`;
+    }
+    document.getElementById('rc_unit_cost').placeholder = cost ? cost.toString() : 'เช่น 60';
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const sel = document.getElementById('rc_product');
+    if (sel) rcProductChanged(sel);
+});
+
 async function adjustStock(stationId, productId, stationName, productName, current) {
     const { value } = await Swal.fire({
         title: 'ปรับสต๊อก',

@@ -10,6 +10,7 @@ use App\Models\StockMovement;
 use App\Services\StockService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class WarehouseController extends Controller
 {
@@ -30,10 +31,24 @@ class WarehouseController extends Controller
             $matrix[$s->product_id][$s->station_id] = $s->quantity;
         }
 
-        return view('warehouse.index', compact('warehouse', 'products', 'stations', 'matrix'));
+        // มูลค่าสินค้าคงเหลือ — คิดเฉพาะสินค้าคืนได้ (น้ำแข็ง/คืนไม่ได้ = ทุนจม ไม่คิดมูลค่าคงเหลือ)
+        // มูลค่า/สินค้า = (คงเหลือรวมทุกจุด) × cost เฉลี่ย
+        $stockValue = [];   // product_id => มูลค่าคงเหลือ
+        $totalStockValue = 0.0;
+        foreach ($products as $p) {
+            if (! $p->is_returnable) continue;
+            $onHand = array_sum($matrix[$p->id] ?? []);
+            $value = $onHand * (float) $p->cost;
+            $stockValue[$p->id] = $value;
+            $totalStockValue += $value;
+        }
+
+        return view('warehouse.index', compact(
+            'warehouse', 'products', 'stations', 'matrix', 'stockValue', 'totalStockValue',
+        ));
     }
 
-    /** รับสินค้าเข้าคลังกลาง (stock in) */
+    /** รับสินค้าเข้าคลังกลาง (stock in) + อัปเดตต้นทุน */
     public function receive(Request $request)
     {
         abort_unless(Auth::user()->isWarehouse() || Auth::user()->isAdmin(), 403);
@@ -41,18 +56,63 @@ class WarehouseController extends Controller
         $data = $request->validate([
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1',
+            'unit_cost' => 'nullable|numeric|min:0', // ต้นทุน/หน่วย ของล็อตที่ซื้อเข้ามา
             'note' => 'nullable|string|max:255',
         ]);
 
         $eventId = $this->eventId();
         $warehouse = Station::where('event_id', $eventId)->where('type', 'warehouse')->firstOrFail();
 
-        $this->stock->adjust(
-            $eventId, $warehouse->id, $data['product_id'], $data['quantity'],
-            'in', 'manual', null, Auth::id(), $data['note'] ?? 'รับสินค้าเข้าคลัง',
-        );
+        $product = Product::where('event_id', $eventId)->findOrFail($data['product_id']);
+        $qty = (int) $data['quantity'];
+        $unitCost = isset($data['unit_cost']) ? (float) $data['unit_cost'] : null;
+
+        DB::transaction(function () use ($eventId, $warehouse, $product, $qty, $unitCost, $data) {
+            $this->stock->adjust(
+                $eventId, $warehouse->id, $product->id, $qty,
+                'in', 'manual', null, Auth::id(), $data['note'] ?? 'รับสินค้าเข้าคลัง',
+                $unitCost,
+            );
+
+            // อัปเดตต้นทุนสินค้าจากล็อตที่รับเข้า (เฉพาะเมื่อกรอกต้นทุนมา)
+            if ($unitCost !== null) {
+                $this->applyReceivedCost($product, $qty, $unitCost, $eventId, $warehouse->id);
+            }
+        });
 
         return back()->with('success', 'รับสินค้าเข้าคลังกลางเรียบร้อย');
+    }
+
+    /**
+     * อัปเดตต้นทุนสินค้าจากการรับเข้า
+     *
+     * สินค้าคืนของได้ (น้ำ/เบียร์): ต้นทุน/หน่วย = ต้นทุนเฉลี่ยถ่วงน้ำหนัก (moving average)
+     *   cost ใหม่ = (จำนวนเดิม × cost เดิม + จำนวนรับเข้า × ต้นทุนล็อตใหม่) / (จำนวนเดิม + จำนวนรับเข้า)
+     *   จำนวนเดิม = ยอดคงเหลือรวมทุกจุด "ก่อน" รับล็อตนี้
+     *
+     * สินค้าคืนไม่ได้ (น้ำแข็ง): ต้นทุนคิดทั้งก้อน → บวกทุนล็อตใหม่เข้า total_cost สะสม
+     */
+    private function applyReceivedCost(Product $product, int $qty, float $unitCost, int $eventId, int $warehouseId): void
+    {
+        $stationIds = Station::where('event_id', $eventId)->pluck('id');
+
+        if ($product->is_returnable) {
+            // ยอดคงเหลือรวมทุกจุด "ก่อน" รับล็อตนี้ (ขณะนี้ stock ถูกบวก qty ไปแล้ว จึงหักกลับ)
+            $onHandAfter = (int) Stock::whereIn('station_id', $stationIds)
+                ->where('product_id', $product->id)->sum('quantity');
+            $prevQty = max(0, $onHandAfter - $qty);
+            $prevCost = (float) $product->cost;
+
+            $newTotalQty = $prevQty + $qty;
+            $newCost = $newTotalQty > 0
+                ? ($prevQty * $prevCost + $qty * $unitCost) / $newTotalQty
+                : $unitCost;
+
+            $product->update(['cost' => round($newCost, 2)]);
+        } else {
+            // คืนไม่ได้: ทุนจม → สะสมทุนที่ลงไปจริงทั้งหมด
+            $product->update(['total_cost' => round((float) $product->total_cost + $qty * $unitCost, 2)]);
+        }
     }
 
     /** ปรับสต๊อก (แก้ไขยอด) ของจุดใดก็ได้ */
