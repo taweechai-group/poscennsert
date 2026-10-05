@@ -250,7 +250,7 @@ async function checkout(type) {
     } else if (type === 'split') {
         const result = await Swal.fire({
             title: 'เงินสด + เงินโอน',
-            html: `<div class="mb-2">ยอดบิล <b style="color:#a5b4fc;font-size:1.4rem">฿${baht(total)}</b></div>`
+            html: `<div class="text-dim">ยอดบิล</div><div class="mb-2" style="color:#a5b4fc;font-size:4rem;font-weight:800;line-height:1.1">${baht(total)}</div>`
                 + `<div style="text-align:left;max-width:280px;margin:0 auto">`
                 + `<label style="font-size:.9rem" for="swalCash">ยอดเงินสด (฿)</label>`
                 + `<input id="swalCash" type="number" min="0" step="1" class="swal2-input" style="width:100%;margin:.25rem 0" placeholder="0">`
@@ -315,7 +315,7 @@ async function checkout(type) {
 
         const result = await Swal.fire({
             title: 'ขายเครดิต',
-            html: `<div class="mb-2">ยอดบิล <b style="color:#fbbf24;font-size:1.4rem">฿${baht(total)}</b></div>`
+            html: `<div class="text-dim">ยอดบิล</div><div class="mb-2" style="color:#fbbf24;font-size:4rem;font-weight:800;line-height:1.1">${baht(total)}</div>`
                 + `<select id="swalSeller" class="swal2-select" style="width:90%">${options}</select>`
                 + `<div id="swalCreditNote" class="mt-2" style="font-size:.9rem;min-height:22px"></div>`,
             didOpen: () => {
