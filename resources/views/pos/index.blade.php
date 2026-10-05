@@ -232,7 +232,7 @@ async function checkout(type) {
     if (type === 'cash') {
         const { value } = await Swal.fire({
             title: 'รับเงินสด',
-            html: `<div class="text-dim">ยอดรวม</div><div style="color:#34d399;font-size:4rem;font-weight:800;line-height:1.1">฿${baht(total)}</div>`,
+            html: `<div class="text-dim">ยอดรวม</div><div style="color:#34d399;font-size:4rem;font-weight:800;line-height:1.1">${baht(total)}</div>`,
             input: 'number', inputLabel: 'จำนวนเงินที่รับ', inputValue: total,
             showCancelButton: true, confirmButtonText: '<i class="bi bi-check-lg"></i> คิดเงิน', cancelButtonText: 'ยกเลิก',
             inputValidator: v => (!v || parseFloat(v) < total) ? 'เงินไม่พอ' : null,
@@ -242,7 +242,7 @@ async function checkout(type) {
     } else if (type === 'transfer') {
         const ok = await Swal.fire({
             icon: 'question', title: 'ชำระด้วยเงินโอน?',
-            html: `<div class="text-dim">ยอด</div><div style="color:#22d3ee;font-size:4rem;font-weight:800;line-height:1.1">฿${baht(total)}</div><small class="text-dim">ยืนยันว่าได้รับเงินโอนแล้ว</small>`,
+            html: `<div class="text-dim">ยอด</div><div style="color:#22d3ee;font-size:4rem;font-weight:800;line-height:1.1">${baht(total)}</div><small class="text-dim">ยืนยันว่าได้รับเงินโอนแล้ว</small>`,
             showCancelButton: true, confirmButtonText: 'ยืนยันรับโอน', cancelButtonText: 'ยกเลิก',
         });
         if (!ok.isConfirmed) return;
