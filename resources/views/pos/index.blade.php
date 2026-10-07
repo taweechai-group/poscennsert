@@ -51,7 +51,7 @@
 
         <div class="row g-4">
             @foreach($products as $p)
-                <div class="col-6 col-md-4">
+                <div class="col-6 col-md-3">
                     <div class="pos-tile card-hover {{ $p->stock_qty <= 0 ? 'out' : '' }}"
                          id="tile-{{ $p->id }}"
                          data-id="{{ $p->id }}" data-name="{{ $p->name }}"
