@@ -69,17 +69,25 @@ class AdminController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:100',
             'unit' => 'required|string|max:20',
+            'pack_size' => 'nullable|integer|min:0',       // จำนวนหน่วยย่อย/แพ็ก (0 = ไม่ใช้แพ็ก)
+            'pack_unit' => 'nullable|string|max:20',        // ชื่อหน่วยแพ็ก เช่น แพ็ก, ลัง
             'price' => 'required|numeric|min:0',
             'cost' => 'nullable|numeric|min:0',
             'is_returnable' => 'nullable|boolean',        // คืนของได้ไหม (น้ำ/เบียร์ = ได้, น้ำแข็ง = ไม่ได้)
+            'is_vip_eligible' => 'nullable|boolean',       // ใช้แลกบัตร VIP ได้ไหม (ปกติคือเบียร์)
             'total_cost' => 'nullable|numeric|min:0',      // ทุนรวมที่ลงไป (สำหรับสินค้าคืนไม่ได้)
             'icon' => 'nullable|string|max:40',
             'color' => 'nullable|string|max:20',
             'image' => 'nullable|image|max:4096', // อัปโหลดรูป สูงสุด 4MB
         ]);
 
+        // หน่วยแพ็ก: ถ้าไม่ได้ตั้งให้เบิกเป็นแพ็ก (pack_size <= 1) เคลียร์ค่าให้สะอาด
+        $data['pack_size'] = (int) ($data['pack_size'] ?? 0);
+        $data['pack_unit'] = $data['pack_size'] > 1 ? ($data['pack_unit'] ?: 'แพ็ก') : null;
+
         // checkbox ไม่ติ๊ก = ไม่ส่งค่ามา → ถือว่าคืนของได้ (true)
         $data['is_returnable'] = $request->boolean('is_returnable');
+        $data['is_vip_eligible'] = $request->boolean('is_vip_eligible');
         // ทุนรวมมีความหมายเฉพาะสินค้าคืนไม่ได้ ถ้าคืนได้บังคับเป็น 0 กันข้อมูลค้าง
         $data['total_cost'] = $data['is_returnable'] ? 0 : ($data['total_cost'] ?? 0);
 
@@ -333,10 +341,12 @@ class AdminController extends Controller
         // cogs = ต้นทุนขาย = Σ(ต้นทุน/หน่วย ณ ตอนขาย × จำนวน) — ใช้ cost ที่ snapshot ไว้ใน sale_items
         // บิลเก่าก่อนมีฟีเจอร์นี้ (sale_items.cost = null) → fallback เป็น products.cost ปัจจุบัน
         // ค่านี้ใช้เฉพาะสินค้าคืนได้ ส่วนน้ำแข็ง/คืนไม่ได้คิดต้นทุนทั้งก้อนจาก total_cost จึงไม่พึ่ง cogs
+        // บิล VIP (แลกฟรี) แยกออกต่างหาก ไม่นำมาคิดกำไร/ขาดทุนของเบียร์ที่ขายปกติ
         $sold = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->join('products', 'products.id', '=', 'sale_items.product_id')
             ->where('sales.event_id', $eventId)
             ->where('sales.status', 'completed')
+            ->where('sales.payment_type', '!=', 'vip')
             ->selectRaw('sale_items.product_id')
             ->selectRaw('SUM(sale_items.quantity) as qty')
             ->selectRaw('SUM(sale_items.subtotal) as revenue')
@@ -396,6 +406,43 @@ class AdminController extends Controller
             'total_profit' => $returnableProfit + $nonReturnableProfit,
             'total_revenue' => $totalRevenue,
             'total_cost' => $totalCost,
+            'vip' => $this->vipReport($eventId),
+        ];
+    }
+
+    /**
+     * สรุปบัตร VIP แลกเบียร์ฟรี — แยกออกจากกำไร/ขาดทุนของเบียร์ที่ขายปกติ
+     *   bills  = จำนวนใบ VIP (บิล payment_type = vip ที่ไม่ถูกยกเลิก)
+     *   bottles = จำนวนขวดที่แลกไปทั้งหมด
+     *   items  = แยกตามสินค้า (ชื่อ + จำนวนขวด)
+     *
+     * @return array{bills: int, bottles: int, items: array<int, array{name: string, unit: string, qty: int}>}
+     */
+    private function vipReport(int $eventId): array
+    {
+        $bills = Sale::where('event_id', $eventId)
+            ->where('status', 'completed')
+            ->where('payment_type', 'vip')
+            ->count();
+
+        $rows = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->join('products', 'products.id', '=', 'sale_items.product_id')
+            ->where('sales.event_id', $eventId)
+            ->where('sales.status', 'completed')
+            ->where('sales.payment_type', 'vip')
+            ->selectRaw('products.name, products.unit')
+            ->selectRaw('SUM(sale_items.quantity) as qty')
+            ->groupBy('products.id', 'products.name', 'products.unit')
+            ->get();
+
+        return [
+            'bills' => $bills,
+            'bottles' => (int) $rows->sum('qty'),
+            'items' => $rows->map(fn ($r) => [
+                'name' => $r->name,
+                'unit' => $r->unit,
+                'qty' => (int) $r->qty,
+            ])->all(),
         ];
     }
 

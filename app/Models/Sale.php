@@ -96,6 +96,7 @@ class Sale extends Model
             'transfer' => 'เงินโอน',
             'split' => 'สด+โอน',
             'credit' => 'เครดิต',
+            'vip' => 'VIP (แลกฟรี)',
             default => $this->payment_type,
         };
     }
@@ -107,6 +108,7 @@ class Sale extends Model
             'transfer' => 'info',
             'split' => 'primary',
             'credit' => 'warning',
+            'vip' => 'dark',
             default => 'secondary',
         };
     }

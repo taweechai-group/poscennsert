@@ -111,7 +111,9 @@
         <div class="line"></div>
         <div class="row total"><span>รวมทั้งสิ้น</span><span>{{ number_format($sale->total, 0) }}</span></div>
 
-        @if($sale->isCredit())
+        @if($sale->payment_type === 'vip')
+            <div class="center" style="margin-top:6px; font-weight:600;">** บัตร VIP — แลกฟรี **</div>
+        @elseif($sale->isCredit())
             <div class="center" style="margin-top:6px; color:#b8860b; font-weight:600;">** ขายแบบเครดิต **</div>
         @elseif($sale->isSplit())
             <div class="row"><span>ชำระโดย</span><span>เงินสด + เงินโอน</span></div>

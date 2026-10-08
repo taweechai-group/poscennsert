@@ -36,7 +36,10 @@ class PosController extends Controller
 
         $sellers = Seller::where('event_id', $eventId)->where('is_active', true)->orderBy('code')->get();
 
-        return view('pos.index', compact('products', 'sellers', 'station'));
+        // เบียร์ที่ใช้แลกบัตร VIP (ปกติมีตัวเดียวในงาน) — เลือกจากในลิสต์ที่โหลดแล้ว จะได้ stock_qty ติดมาด้วย
+        $vipProduct = $products->firstWhere('is_vip_eligible', true);
+
+        return view('pos.index', compact('products', 'sellers', 'station', 'vipProduct'));
     }
 
     /** บันทึกการขาย — ตัดสต๊อก, ออกบิล, จัดการเครดิต */
@@ -46,7 +49,7 @@ class PosController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.quantity' => 'required|integer|min:1',
-            'payment_type' => 'required|in:cash,transfer,split,credit',
+            'payment_type' => 'required|in:cash,transfer,split,credit,vip',
             'seller_id' => 'nullable|exists:sellers,id',
             'paid' => 'nullable|numeric|min:0',
             'cash_amount' => 'nullable|numeric|min:0',
@@ -100,6 +103,9 @@ class PosController extends Controller
                 $products = Product::whereIn('id', collect($data['items'])->pluck('product_id'))
                     ->get()->keyBy('id');
 
+                // VIP = แลกเบียร์ฟรี → ราคาทุกชิ้นเป็น 0 (บังคับฝั่งเซิร์ฟเวอร์ ไม่เชื่อค่าจาก client)
+                $isVip = $data['payment_type'] === 'vip';
+
                 // ตรวจสต๊อกก่อน
                 $total = 0;
                 foreach ($data['items'] as $item) {
@@ -108,11 +114,11 @@ class PosController extends Controller
                     if ($item['quantity'] > $available) {
                         throw new \RuntimeException("สินค้า {$p->name} คงเหลือ {$available} {$p->unit} ไม่พอ (สั่ง {$item['quantity']})");
                     }
-                    $total += $p->price * $item['quantity'];
+                    $total += ($isVip ? 0 : $p->price) * $item['quantity'];
                 }
 
                 $isCredit = $data['payment_type'] === 'credit';
-                $paid = $isCredit ? 0 : ($data['paid'] ?? $total);
+                $paid = ($isCredit || $isVip) ? 0 : ($data['paid'] ?? $total);
 
                 // แยกยอดเงินสด/เงินโอน เพื่อให้ยอดปิดลิ้นชักตรง
                 [$cashAmount, $transferAmount] = $this->splitAmounts($data, $total);
@@ -136,16 +142,18 @@ class PosController extends Controller
                     $p = $products[$item['product_id']];
                     // ต้นทุน/หน่วย ณ เวลาขาย — เฉพาะสินค้าคืนได้ (คิด cost × qty)
                     // น้ำแข็ง/คืนไม่ได้ = คิดต้นทุนทั้งก้อนจาก total_cost → ไม่เก็บต้นทุนรายชิ้น (null)
-                    $unitCost = $p->is_returnable ? (float) $p->cost : null;
+                    // VIP = แลกฟรี → ไม่ snapshot ต้นทุน เพื่อแยกออกจากกำไร/ขาดทุนของเบียร์ที่ขายปกติ
+                    $unitCost = ($isVip || ! $p->is_returnable) ? null : (float) $p->cost;
+                    $unitPrice = $isVip ? 0 : $p->price;
 
                     SaleItem::create([
                         'sale_id' => $sale->id,
                         'product_id' => $p->id,
                         'product_name' => $p->name,
-                        'price' => $p->price,
-                        'cost' => $unitCost, // Snapshot ต้นทุน ณ เวลาขาย ไว้คิดกำไรไม่ให้เพี้ยนย้อนหลัง
+                        'price' => $unitPrice,
+                        'cost' => $unitCost, // Snapshot ต้นทุน ณ เวลาขาย ไว้คิดกำไรไม่ให้เพี้ยนย้อนหลัง (VIP = null ไม่คิด)
                         'quantity' => $item['quantity'],
-                        'subtotal' => $p->price * $item['quantity'],
+                        'subtotal' => $unitPrice * $item['quantity'],
                     ]);
 
                     // ตัดสต๊อกจุดขาย (บันทึกต้นทุน/หน่วยลง movement ด้วย เพื่อให้แอดมินเห็นในประวัติ)

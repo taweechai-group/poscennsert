@@ -37,6 +37,18 @@
     .cart-line { border-bottom: 1px solid var(--stroke); }
     .qty-btn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: .55rem; }
     .pay-btn { padding: .9rem; font-size: 1.15rem; font-weight: 600; border-radius: .9rem; }
+
+    /* ช่องกรอกเงินในป๊อปอัป (รับเงินสด / สด+โอน) — ตัวเลขใหญ่ จัดกลาง กดง่ายหน้างาน */
+    .swal2-popup .swal2-input[type=number],
+    .swal2-popup input#swalCash,
+    .swal2-popup input#swalTransfer {
+        font-size: 2.4rem;
+        font-weight: 800;
+        text-align: center;
+        height: auto;
+        padding: .5rem .75rem;
+        letter-spacing: 1px;
+    }
 </style>
 @endpush
 
@@ -132,6 +144,25 @@
                     </button>
                 </div>
             </div>
+
+            @if($vipProduct)
+                {{-- บัตร VIP แลกเบียร์ฟรี — ตัดสต๊อก {{ $vipProduct->name }} --}}
+                <div class="mt-2 pt-2" style="border-top:1px dashed var(--stroke)">
+                    <div class="small text-dim mb-1"><i class="bi bi-person-badge"></i> บัตร VIP แลกเบียร์ฟรี</div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <button class="btn pay-btn w-100" style="background:linear-gradient(135deg,#334155,#475569);color:#fff" onclick="vipRedeem(4)">
+                                <i class="bi bi-cup-straw"></i> VIP 4 ขวด
+                            </button>
+                        </div>
+                        <div class="col-6">
+                            <button class="btn pay-btn w-100" style="background:linear-gradient(135deg,#334155,#475569);color:#fff" onclick="vipRedeem(8)">
+                                <i class="bi bi-cup-straw"></i> VIP 8 ขวด
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 </div>
@@ -152,6 +183,14 @@ let cart = {};
 
 // ข้อมูลเชียร์เบียร์ (สำหรับเลือกตอนกดขายเครดิต)
 const SELLERS = {{ Illuminate\Support\Js::from($sellersData) }};
+
+// เบียร์ที่ใช้แลกบัตร VIP (null ถ้าไม่ได้ตั้งค่า)
+const VIP_PRODUCT = {{ Illuminate\Support\Js::from($vipProduct ? [
+    'id' => $vipProduct->id,
+    'name' => $vipProduct->name,
+    'unit' => $vipProduct->unit,
+    'stock' => $vipProduct->stock_qty,
+] : null) }};
 
 function addToCart(el) {
     const id = el.dataset.id;
@@ -219,6 +258,43 @@ function renderCart() {
 
 function clearCart() { cart = {}; renderCart(); }
 function cartTotal() { return Object.values(cart).reduce((s, c) => s + c.price * c.qty, 0); }
+
+// บัตร VIP แลกเบียร์ฟรี — ตัดสต๊อกเบียร์ VIP จำนวน qty ขวด ราคา 0 (บิลแยก ไม่ยุ่งกับตะกร้า)
+async function vipRedeem(qty) {
+    if (!VIP_PRODUCT) return;
+    if (VIP_PRODUCT.stock < qty) {
+        Swal.fire({ icon: 'warning', title: 'สต๊อกเบียร์ไม่พอ',
+            text: `${VIP_PRODUCT.name} เหลือ ${VIP_PRODUCT.stock} ${VIP_PRODUCT.unit} แลก ${qty} ไม่ได้` });
+        return;
+    }
+
+    const ok = await Swal.fire({
+        icon: 'question', title: `บัตร VIP ${qty} ขวด`,
+        html: `แลก <b>${VIP_PRODUCT.name}</b> ฟรี<div style="color:#fbbf24;font-size:4rem;font-weight:800;line-height:1.1">${qty} ${VIP_PRODUCT.unit}</div><small class="text-dim">ตัดสต๊อก ไม่คิดเงิน</small>`,
+        showCancelButton: true, confirmButtonText: '<i class="bi bi-cup-straw"></i> ยืนยันแลก VIP', cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#f59e0b',
+    });
+    if (!ok.isConfirmed) return;
+
+    const res = await fetch('{{ route('pos.checkout') }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': window.CSRF, 'Accept': 'application/json' },
+        body: JSON.stringify({
+            items: [{ product_id: VIP_PRODUCT.id, quantity: qty }],
+            payment_type: 'vip',
+        }),
+    });
+    const data = await res.json();
+    if (!data.ok) { Swal.fire({ icon: 'error', title: 'แลกไม่สำเร็จ', text: data.message }); return; }
+
+    await Swal.fire({
+        icon: 'success', title: 'แลก VIP สำเร็จ!',
+        html: `บิล <b>${data.bill_no}</b><br>${VIP_PRODUCT.name} ${qty} ${VIP_PRODUCT.unit}<br><span style="color:#fbbf24">บัตร VIP (แลกฟรี)</span>`,
+        showCancelButton: true, confirmButtonText: '<i class="bi bi-printer"></i> พิมพ์ใบเสร็จ', cancelButtonText: 'ปิด',
+    }).then(r => { if (r.isConfirmed) window.open(data.receipt_url, '_blank'); });
+
+    location.reload();
+}
 
 async function checkout(type) {
     const items = Object.values(cart).map(c => ({ product_id: c.id, quantity: c.qty }));
@@ -316,7 +392,7 @@ async function checkout(type) {
         const result = await Swal.fire({
             title: 'ขายเครดิต',
             html: `<div class="text-dim">ยอดบิล</div><div class="mb-2" style="color:#fbbf24;font-size:4rem;font-weight:800;line-height:1.1">${baht(total)}</div>`
-                + `<select id="swalSeller" class="swal2-select" style="width:90%">${options}</select>`
+                + `<select id="swalSeller" class="swal2-select" style="width:95%;font-size:1.5rem;font-weight:700;padding:.65rem .5rem;text-align:center;text-align-last:center">${options}</select>`
                 + `<div id="swalCreditNote" class="mt-2" style="font-size:.9rem;min-height:22px"></div>`,
             didOpen: () => {
                 const sel = document.getElementById('swalSeller');

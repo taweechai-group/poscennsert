@@ -125,6 +125,45 @@
             </table>
         </div>
 
+        {{-- บัตร VIP แลกเบียร์ฟรี — แยกออกจากกำไร/ขาดทุนด้านบน --}}
+        @if($profit['vip']['bills'] > 0)
+            <div class="card mb-4" style="border-color:rgba(148,163,184,.35)">
+                <div class="p-3 d-flex justify-content-between align-items-center" style="background:rgba(148,163,184,.1)">
+                    <span class="fw-semibold fs-5"><i class="bi bi-person-badge"></i> บัตร VIP (แลกฟรี)</span>
+                    <span class="text-dim small"><i class="bi bi-info-circle"></i> แยกต่างหาก ไม่รวมในกำไร/ขาดทุน</span>
+                </div>
+                <div class="row g-3 p-3">
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="small text-dim">จำนวนใบที่ใช้</div>
+                            <div class="fs-3 fw-bold">{{ number_format($profit['vip']['bills']) }} <small class="fs-6 text-dim">ใบ</small></div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <div class="small text-dim">เบียร์ที่แลกไป</div>
+                            <div class="fs-3 fw-bold text-warning">{{ number_format($profit['vip']['bottles']) }} <small class="fs-6 text-dim">ขวด</small></div>
+                        </div>
+                    </div>
+                </div>
+                @if(count($profit['vip']['items']) > 0)
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr><th>สินค้า</th><th class="text-end">แลกไป</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach($profit['vip']['items'] as $v)
+                                <tr>
+                                    <td>{{ $v['name'] }}</td>
+                                    <td class="text-end fw-semibold">{{ number_format($v['qty']) }} {{ $v['unit'] }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @endif
+            </div>
+        @endif
+
         {{-- ยอดขายแยกตามจุดขาย --}}
         <h6 class="mb-2"><i class="bi bi-shop"></i> ยอดขายแยกตามจุดขาย</h6>
         <div class="card mb-4">

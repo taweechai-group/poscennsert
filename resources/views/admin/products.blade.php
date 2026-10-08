@@ -30,8 +30,10 @@
             @php
                 $pData = [
                     'id' => $p->id, 'name' => $p->name, 'unit' => $p->unit,
+                    'pack_size' => $p->pack_size, 'pack_unit' => $p->pack_unit,
                     'price' => $p->price, 'cost' => $p->cost, 'icon' => $p->icon, 'color' => $p->color,
                     'is_returnable' => $p->is_returnable, 'total_cost' => $p->total_cost,
+                    'is_vip_eligible' => $p->is_vip_eligible,
                 ];
             @endphp
             <div class="col-6 col-md-4 col-lg-3">
@@ -49,6 +51,9 @@
                         @endunless
                     </div>
                     <div class="mb-1"><span class="fw-bold fs-4" style="color:{{ $p->color }}">฿{{ number_format($p->price,0) }}</span> <small class="text-dim">/ {{ $p->unit }}</small></div>
+                    @if($p->hasPack())
+                        <small class="text-dim d-block"><i class="bi bi-box-seam"></i> 1 {{ $p->pack_unit }} = {{ $p->pack_size }} {{ $p->unit }}</small>
+                    @endif
                     @if($p->is_returnable)
                         <small class="text-dim">ต้นทุน ฿{{ number_format($p->cost,0) }} / {{ $p->unit }}</small>
                     @else
@@ -86,8 +91,19 @@
 
                 <div class="mb-2"><label class="form-label">ชื่อสินค้า</label><input name="name" id="pf_name" class="form-control" required></div>
                 <div class="row">
-                    <div class="col-6 mb-2"><label class="form-label">หน่วย</label><input name="unit" id="pf_unit" class="form-control" placeholder="กระป๋อง" required></div>
-                    <div class="col-6 mb-2"><label class="form-label">ราคาขาย</label><input type="number" name="price" id="pf_price" class="form-control" step="0.01" required></div>
+                    <div class="col-6 mb-2"><label class="form-label">หน่วยย่อย</label><input name="unit" id="pf_unit" class="form-control" placeholder="ขวด" required></div>
+                    <div class="col-6 mb-2"><label class="form-label">ราคาขาย / หน่วยย่อย</label><input type="number" name="price" id="pf_price" class="form-control" step="0.01" required></div>
+                </div>
+
+                {{-- หน่วยเบิกเป็นแพ็ก (ไม่บังคับ) --}}
+                <div class="mb-2 p-2 rounded" style="background:rgba(255,255,255,.03);border:1px solid var(--stroke-2)">
+                    <label class="form-label mb-1"><i class="bi bi-box-seam"></i> หน่วยเบิก (แพ็ก)</label>
+                    <div class="row g-2">
+                        <div class="col-5"><input type="number" name="pack_size" id="pf_pack_size" class="form-control" min="0" step="1" value="0" placeholder="12"></div>
+                        <div class="col-2 d-flex align-items-center justify-content-center text-dim small">หน่วยย่อย /</div>
+                        <div class="col-5"><input name="pack_unit" id="pf_pack_unit" class="form-control" placeholder="แพ็ก"></div>
+                    </div>
+                    <small class="text-dim">เช่น เบียร์ 12 ขวด/แพ็ก → ใส่ <b>12</b> และ <b>แพ็ก</b> · ใส่ 0 = ไม่ใช้แพ็ก</small>
                 </div>
                 {{-- ประเภทการคิดกำไร --}}
                 <div class="mb-2 p-2 rounded" style="background:rgba(255,255,255,.03);border:1px solid var(--stroke-2)">
@@ -96,6 +112,14 @@
                         <label class="form-check-label" for="pf_returnable">สินค้าคืนของได้ (น้ำ / เบียร์)</label>
                     </div>
                     <small class="text-dim">ติ๊ก = ของเหลือคืนได้ คิดต้นทุนเฉพาะที่ขาย · ไม่ติ๊ก = คืนไม่ได้ (น้ำแข็ง) คิดทุนทั้งก้อน</small>
+                </div>
+                {{-- แลกบัตร VIP ได้ (ปกติคือเบียร์ตัวเดียวในงาน) --}}
+                <div class="mb-2 p-2 rounded" style="background:rgba(255,255,255,.03);border:1px solid var(--stroke-2)">
+                    <div class="form-check form-switch mb-1">
+                        <input class="form-check-input" type="checkbox" name="is_vip_eligible" id="pf_vip" value="1">
+                        <label class="form-check-label" for="pf_vip"><i class="bi bi-person-badge"></i> ใช้แลกบัตร VIP ได้ (เบียร์)</label>
+                    </div>
+                    <small class="text-dim">ติ๊กที่เบียร์ที่ให้แลก VIP → ปุ่ม VIP 4/8 ที่หน้าขายจะตัดสต๊อกสินค้าตัวนี้</small>
                 </div>
 
                 {{-- โหมดคืนได้: ต้นทุนต่อหน่วย --}}
@@ -141,8 +165,10 @@ function openProduct(p = null, imageUrl = null) {
         form.action = '{{ url('admin/products') }}/' + p.id;
         document.getElementById('productModalTitle').textContent = 'แก้ไขสินค้า';
         pf_name.value = p.name; pf_unit.value = p.unit; pf_price.value = p.price;
+        pf_pack_size.value = p.pack_size ?? 0; pf_pack_unit.value = p.pack_unit ?? '';
         pf_cost.value = p.cost; pf_color.value = p.color; pf_icon.value = p.icon;
         pf_returnable.checked = !!p.is_returnable;
+        pf_vip.checked = !!p.is_vip_eligible;
         pf_total_cost.value = p.total_cost ?? 0;
         showPreview(imageUrl);
     } else {

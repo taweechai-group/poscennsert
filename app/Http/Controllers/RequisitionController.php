@@ -40,10 +40,10 @@ class RequisitionController extends Controller
     /** POS ขอเบิกจากคลังกลาง */
     public function store(Request $request)
     {
-        // ฟอร์มส่งมาทุกสินค้ารวมทั้งตัวที่กรอก 0 — คัดเฉพาะตัวที่ขอจริงก่อน validate
+        // ฟอร์มส่งมาทุกสินค้ารวมทั้งตัวที่กรอก 0 — คัดเฉพาะตัวที่ขอจริง (แพ็ก หรือ หน่วยย่อย > 0) ก่อน validate
         $request->merge([
             'items' => collect($request->input('items', []))
-                ->filter(fn ($i) => (int) ($i['quantity'] ?? 0) > 0)
+                ->filter(fn ($i) => (int) ($i['quantity'] ?? 0) > 0 || (int) ($i['pack_quantity'] ?? 0) > 0)
                 ->values()
                 ->all(),
         ]);
@@ -51,7 +51,8 @@ class RequisitionController extends Controller
         $data = $request->validate([
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
-            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.quantity' => 'nullable|integer|min:0',
+            'items.*.pack_quantity' => 'nullable|integer|min:0',
             'note' => 'nullable|string|max:255',
         ], [
             'items.required' => 'กรุณาระบุจำนวนที่ต้องการเบิกอย่างน้อย 1 รายการ',
@@ -63,7 +64,12 @@ class RequisitionController extends Controller
         $eventId = $user->station->event_id;
         $warehouse = Station::where('event_id', $eventId)->where('type', 'warehouse')->firstOrFail();
 
-        DB::transaction(function () use ($data, $user, $eventId, $warehouse) {
+        // โหลด pack_size ของสินค้าที่ขอ ไว้คำนวณแพ็ก -> หน่วยย่อย (กันค่าปลอมจากฟอร์ม)
+        $products = Product::where('event_id', $eventId)
+            ->whereIn('id', collect($data['items'])->pluck('product_id'))
+            ->get()->keyBy('id');
+
+        DB::transaction(function () use ($data, $user, $eventId, $warehouse, $products) {
             $req = Requisition::create([
                 'event_id' => $eventId,
                 'code' => $this->nextCode($eventId),
@@ -75,11 +81,22 @@ class RequisitionController extends Controller
             ]);
 
             foreach ($data['items'] as $item) {
-                if ($item['quantity'] < 1) continue;
+                $product = $products[$item['product_id']] ?? null;
+                if (! $product) continue;
+
+                $packSize = $product->hasPack() ? $product->pack_size : 0;
+                $packQty = (int) ($item['pack_quantity'] ?? 0);
+                $looseQty = (int) ($item['quantity'] ?? 0);
+
+                // ยอดจริง (หน่วยย่อย) = แพ็ก*ขนาดแพ็ก + ที่กรอกเป็นหน่วยย่อยเพิ่ม
+                $total = ($packSize > 0 ? $packQty * $packSize : 0) + $looseQty;
+                if ($total < 1) continue;
+
                 RequisitionItem::create([
                     'requisition_id' => $req->id,
-                    'product_id' => $item['product_id'],
-                    'quantity_requested' => $item['quantity'],
+                    'product_id' => $product->id,
+                    'quantity_requested' => $total,
+                    'pack_quantity' => ($packSize > 0 && $packQty > 0) ? $packQty : null,
                 ]);
             }
         });

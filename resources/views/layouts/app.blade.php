@@ -267,6 +267,15 @@
             Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: @json(session('error')) });
         @endif
         window.baht = n => Number(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+        // กันยอดเงิน/จำนวนเพี้ยนจากการหมุนลูกกลิ้งเมาส์ทับช่องตัวเลข
+        // (ดักที่ document ครอบทั้งช่องที่มีอยู่แล้วและที่ SweetAlert สร้างใหม่)
+        document.addEventListener('wheel', e => {
+            const el = e.target;
+            if (el.matches?.('input[type=number]') && el === document.activeElement) {
+                el.blur();  // เลิก focus เพื่อให้ลูกกลิ้งไปเลื่อนหน้าแทน ไม่ไปเปลี่ยนเลข
+            }
+        }, { passive: true });
     </script>
     @stack('scripts')
 </body>

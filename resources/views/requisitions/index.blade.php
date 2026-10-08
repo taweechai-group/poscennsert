@@ -85,6 +85,9 @@
                         <span class="req-chip">
                             {{ $it->product->name }}
                             <span class="qty">{{ $it->quantity_requested }}</span>
+                            @if($it->packNote())
+                                <span class="text-dim">({{ $it->packNote() }})</span>
+                            @endif
                             @if($it->quantity_delivered !== null && $it->quantity_delivered != $it->quantity_requested)
                                 <span class="text-success">&rarr; {{ $it->quantity_delivered }}</span>
                             @endif
@@ -98,9 +101,10 @@
 
                 @if($user->isWarehouse() || $user->isAdmin())
                     @if($req->status === 'pending')
+                        @php($approveItems = $req->items->map(fn($i) => ['id' => $i->id, 'name' => $i->product->name, 'qty' => $i->quantity_requested, 'pack' => $i->packNote(), 'unit' => $i->product->unit]))
                         <div class="d-flex gap-2 req-action">
                             <button class="btn btn-success flex-fill"
-                                    onclick='approveReq(@json($req->code), {{ $req->id }}, @json($req->items->map(fn($i)=>["id"=>$i->id,"name"=>$i->product->name,"qty"=>$i->quantity_requested])))'>
+                                    onclick='approveReq(@json($req->code), {{ $req->id }}, @json($approveItems))'>
                                 <i class="bi bi-check-lg"></i> อนุมัติ + จ่าย
                             </button>
                             <form method="POST" action="{{ route('requisitions.reject', $req) }}"
@@ -141,6 +145,9 @@
                                 @foreach($req->items as $it)
                                     <span class="badge bg-light text-dark border">
                                         {{ $it->product->name }}: {{ $it->quantity_requested }}
+                                        @if($it->packNote())
+                                            <span class="text-muted">({{ $it->packNote() }})</span>
+                                        @endif
                                         @if($it->quantity_delivered !== null && $it->quantity_delivered != $it->quantity_requested)
                                             <span class="text-success">(จ่าย {{ $it->quantity_delivered }})</span>
                                         @endif
@@ -153,7 +160,8 @@
                             @if($user->isWarehouse() || $user->isAdmin())
                                 <td>
                                     @if($req->status === 'pending')
-                                        <button class="btn btn-sm btn-success" onclick='approveReq(@json($req->code), {{ $req->id }}, @json($req->items->map(fn($i)=>["id"=>$i->id,"name"=>$i->product->name,"qty"=>$i->quantity_requested])))'>
+                                        @php($approveItems = $req->items->map(fn($i) => ['id' => $i->id, 'name' => $i->product->name, 'qty' => $i->quantity_requested, 'pack' => $i->packNote(), 'unit' => $i->product->unit]))
+                                        <button class="btn btn-sm btn-success" onclick='approveReq(@json($req->code), {{ $req->id }}, @json($approveItems))'>
                                             <i class="bi bi-check-lg"></i> อนุมัติ+จ่าย
                                         </button>
                                         <form method="POST" action="{{ route('requisitions.reject', $req) }}" class="d-inline"
@@ -203,20 +211,47 @@
                     </div>
                 @endif
                 @foreach($products as $i => $p)
-                    <div class="qty-row d-flex align-items-center gap-2">
-                        <div class="flex-grow-1 min-w-0">
-                            <i class="bi {{ $p->icon }}" style="color:{{ $p->color }}"></i>
-                            {{ $p->name }}
-                            <small class="text-dim">({{ $p->unit }})</small>
-                        </div>
-                        <div class="input-group qty-group flex-nowrap w-auto flex-shrink-0">
-                            <button type="button" class="btn btn-outline-secondary" data-step="-1">&minus;</button>
+                    <div class="qty-row" data-pack-size="{{ $p->hasPack() ? $p->pack_size : 0 }}">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="flex-grow-1 min-w-0">
+                                <i class="bi {{ $p->icon }}" style="color:{{ $p->color }}"></i>
+                                {{ $p->name }}
+                                <small class="text-dim">({{ $p->unit }})</small>
+                            </div>
                             <input type="hidden" name="items[{{ $i }}][product_id]" value="{{ $p->id }}">
-                            <input type="number" name="items[{{ $i }}][quantity]" class="form-control" min="0"
-                                   inputmode="numeric" style="width:66px"
-                                   value="{{ old('items.'.$i.'.quantity', 0) }}">
-                            <button type="button" class="btn btn-outline-secondary" data-step="1">+</button>
+
+                            @if($p->hasPack())
+                                {{-- ช่องกรอกแพ็ก --}}
+                                <div class="input-group qty-group flex-nowrap w-auto flex-shrink-0">
+                                    <button type="button" class="btn btn-outline-secondary" data-step="-1">&minus;</button>
+                                    <input type="number" name="items[{{ $i }}][pack_quantity]" class="form-control js-pack" min="0"
+                                           inputmode="numeric" style="width:60px" aria-label="จำนวนแพ็ก"
+                                           value="{{ old('items.'.$i.'.pack_quantity', 0) }}">
+                                    <button type="button" class="btn btn-outline-secondary" data-step="1">+</button>
+                                </div>
+                                <small class="text-dim flex-shrink-0" style="width:40px">{{ $p->pack_unit }}</small>
+                            @else
+                                {{-- ไม่มีแพ็ก: กรอกหน่วยย่อยตรงๆ --}}
+                                <div class="input-group qty-group flex-nowrap w-auto flex-shrink-0">
+                                    <button type="button" class="btn btn-outline-secondary" data-step="-1">&minus;</button>
+                                    <input type="number" name="items[{{ $i }}][quantity]" class="form-control js-loose" min="0"
+                                           inputmode="numeric" style="width:66px" aria-label="จำนวน{{ $p->unit }}"
+                                           value="{{ old('items.'.$i.'.quantity', 0) }}">
+                                    <button type="button" class="btn btn-outline-secondary" data-step="1">+</button>
+                                </div>
+                            @endif
                         </div>
+
+                        @if($p->hasPack())
+                            {{-- บรรทัดสอง: กรอกเศษเป็นหน่วยย่อยได้ + สรุปยอดรวม --}}
+                            <div class="d-flex align-items-center justify-content-end gap-2 mt-2">
+                                <small class="text-dim">หรือกรอก {{ $p->unit }}:</small>
+                                <input type="number" name="items[{{ $i }}][quantity]" class="form-control form-control-sm js-loose" min="0"
+                                       inputmode="numeric" style="width:66px" aria-label="จำนวน{{ $p->unit }}เพิ่ม"
+                                       value="{{ old('items.'.$i.'.quantity', 0) }}">
+                                <small class="text-success fw-semibold js-total" data-unit=" {{ $p->unit }}" style="min-width:90px;text-align:right">รวม 0 {{ $p->unit }}</small>
+                            </div>
+                        @endif
                     </div>
                 @endforeach
                 <div class="mt-3">
@@ -247,12 +282,32 @@ document.addEventListener('click', e => {
     const input = btn.parentElement.querySelector('input[type=number]');
     const next = (parseInt(input.value, 10) || 0) + parseInt(btn.dataset.step, 10);
     input.value = Math.max(0, next);
+    updateRowTotal(input.closest('.qty-row'));
 });
+
+// คำนวณยอดรวม (หน่วยย่อย) = แพ็ก*ขนาดแพ็ก + เศษที่กรอกเป็นหน่วยย่อย
+function updateRowTotal(row) {
+    if (!row) return;
+    const packSize = parseInt(row.dataset.packSize, 10) || 0;
+    if (packSize <= 0) return; // สินค้าไม่มีแพ็ก ไม่ต้องสรุป
+    const packQty  = parseInt(row.querySelector('.js-pack')?.value, 10) || 0;
+    const looseQty = parseInt(row.querySelector('.js-loose')?.value, 10) || 0;
+    const total = packQty * packSize + looseQty;
+    const el = row.querySelector('.js-total');
+    if (el) el.textContent = 'รวม ' + total + el.dataset.unit;
+}
+
+// อัปเดตยอดรวมเมื่อพิมพ์ + ตั้งค่าเริ่มต้น
+document.addEventListener('input', e => {
+    if (e.target.matches('.js-pack, .js-loose')) updateRowTotal(e.target.closest('.qty-row'));
+});
+document.querySelectorAll('.qty-row').forEach(updateRowTotal);
 
 async function approveReq(code, id, items) {
     let html = '<div style="text-align:left">';
     items.forEach(it => {
-        html += `<div class="mb-2"><label class="form-label mb-0">${it.name} <small class="text-muted">(ขอ ${it.qty})</small></label>
+        const packInfo = it.pack ? ` · ${it.pack}` : '';
+        html += `<div class="mb-2"><label class="form-label mb-0">${it.name} <small class="text-muted">(ขอ ${it.qty} ${it.unit || ''}${packInfo})</small></label>
                  <input type="number" inputmode="numeric" class="form-control swal-qty" data-item="${it.id}" value="${it.qty}" min="0"></div>`;
     });
     html += '</div>';
