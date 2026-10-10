@@ -150,14 +150,9 @@
                 <div class="mt-2 pt-2" style="border-top:1px dashed var(--stroke)">
                     <div class="small text-dim mb-1"><i class="bi bi-person-badge"></i> บัตร VIP แลกเบียร์ฟรี</div>
                     <div class="row g-2">
-                        <div class="col-6">
-                            <button class="btn pay-btn w-100" style="background:linear-gradient(135deg,#334155,#475569);color:#fff" onclick="vipRedeem(4)">
-                                <i class="bi bi-cup-straw"></i> VIP 4 ขวด
-                            </button>
-                        </div>
-                        <div class="col-6">
+                        <div class="col-12">
                             <button class="btn pay-btn w-100" style="background:linear-gradient(135deg,#334155,#475569);color:#fff" onclick="vipRedeem(8)">
-                                <i class="bi bi-cup-straw"></i> VIP 8 ขวด
+                                <i class="bi bi-cup-straw"></i> VIP 8 กระป๋อง
                             </button>
                         </div>
                     </div>
