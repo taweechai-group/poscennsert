@@ -219,6 +219,11 @@ class AdminController extends Controller
                 $s->commission = $salesTotal * $s->commission_rate / 100;
                 $s->outstanding = $s->outstanding();
 
+                // เงินสำรองจ่ายคอมมิชชั่นที่จ่ายไปแล้ว (hardcode ใน config ไม่ลง DB)
+                // คงเหลือ = คอมที่ได้ − ที่จ่ายไปแล้ว
+                $s->commission_advance = (float) (config('commission_advance.'.$s->code) ?? 0);
+                $s->commission_remaining = $s->commission - $s->commission_advance;
+
                 // ขายสินค้าอะไรไปเท่าไหร่ — รวมจำนวน + ยอดจากบิลที่ขายสำเร็จ
                 $s->product_summary = $s->sales
                     ->flatMap(fn ($sale) => $sale->items)

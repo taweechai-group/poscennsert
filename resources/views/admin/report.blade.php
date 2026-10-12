@@ -239,7 +239,7 @@
         <h6 class="mb-2"><i class="bi bi-person-badge"></i> คอมมิชชั่นเชียร์เบียร์</h6>
         <div class="card mb-4">
             <table class="table table-sm mb-0">
-                <thead class="table-light"><tr><th>รหัส</th><th>ชื่อ</th><th class="text-end">ยอดขาย</th><th class="text-end">คอม %</th><th class="text-end">คอมมิชชั่น</th><th class="text-end">เครดิตค้าง</th></tr></thead>
+                <thead class="table-light"><tr><th>รหัส</th><th>ชื่อ</th><th class="text-end">ยอดขาย</th><th class="text-end">คอม %</th><th class="text-end">คอมมิชชั่น</th><th class="text-end">จ่ายแล้ว</th><th class="text-end">คงเหลือ</th><th class="text-end">เครดิตค้าง</th></tr></thead>
                 <tbody>
                     @forelse($sellers as $s)
                         <tr>
@@ -247,12 +247,14 @@
                             <td class="text-end">{{ number_format($s->sales_total,0) }}</td>
                             <td class="text-end">{{ rtrim(rtrim(number_format($s->commission_rate,2),'0'),'.') }}%</td>
                             <td class="text-end fw-bold text-info">{{ number_format($s->commission,2) }}</td>
+                            <td class="text-end {{ $s->commission_advance > 0 ? 'text-success' : 'text-muted' }}">{{ $s->commission_advance > 0 ? number_format($s->commission_advance,2) : '-' }}</td>
+                            <td class="text-end fw-bold {{ abs($s->commission_remaining) < 0.005 ? 'text-muted' : ($s->commission_remaining > 0 ? 'text-warning' : 'text-danger') }}">{{ number_format($s->commission_remaining,2) }}</td>
                             <td class="text-end {{ $s->outstanding > 0 ? 'text-danger fw-bold' : 'text-muted' }}">{{ number_format($s->outstanding,0) }}</td>
                         </tr>
                         @if($s->product_summary->count() > 0)
                             <tr>
                                 <td></td>
-                                <td colspan="5" class="pt-0">
+                                <td colspan="7" class="pt-0">
                                     @foreach($s->product_summary as $key=>$p)
                                      @if($key != 0) / @endif
                                         <span><span class="text-muted">{{ $p['name'] }}  × {{ number_format($p['qty']) }} = {{ number_format($p['total'],0) }}</span></span>
@@ -261,13 +263,15 @@
                             </tr>
                         @endif
                     @empty
-                        <tr><td colspan="6" class="text-center text-muted py-3">ไม่มีข้อมูล</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-3">ไม่มีข้อมูล</td></tr>
                     @endforelse
                 </tbody>
                 <tfoot class="table-light">
                     <tr class="fw-bold">
                         <td colspan="4" class="text-end">รวมคอมมิชชั่น</td>
                         <td class="text-end text-info">{{ number_format($sellers->sum('commission'),2) }}</td>
+                        <td class="text-end text-success">{{ number_format($sellers->sum('commission_advance'),2) }}</td>
+                        <td class="text-end text-warning">{{ number_format($sellers->sum('commission_remaining'),2) }}</td>
                         <td class="text-end text-danger">{{ number_format($sellers->sum('outstanding'),0) }}</td>
                     </tr>
                 </tfoot>
