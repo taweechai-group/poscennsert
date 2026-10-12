@@ -339,8 +339,7 @@ class PosController extends Controller
             $perPage = 20;
         }
 
-        $query = fn () => Sale::where('station_id', $station->id)
-            ->whereDate('created_at', today());
+        $query = fn () => Sale::where('station_id', $station->id);
 
         $sales = $query()
             ->with('items', 'seller', 'credit', 'voider')
@@ -364,7 +363,6 @@ class PosController extends Controller
             ->join('credit_payments', 'credit_payments.id', '=', 'credits.credit_payment_id')
             ->where('sales.station_id', $station->id)
             ->where('sales.status', 'completed')
-            ->whereDate('sales.created_at', today())
             ->whereNotNull('credits.settled_at')
             // แยกสด/โอนของ "ใบชำระ" ตามสัดส่วนยอดบิลที่บิลนี้คิดเป็นของใบชำระนั้น
             ->selectRaw('COALESCE(SUM(credits.amount), 0) as amount')

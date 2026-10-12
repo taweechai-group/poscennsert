@@ -209,14 +209,30 @@ class AdminController extends Controller
             'bills' => $sales->count(),
         ];
 
-        // คอมมิชชั่นเชียร์เบียร์
-        $sellers = Seller::where('event_id', $event->id)->get()->map(function ($s) {
-            $salesTotal = $s->sales()->where('status', 'completed')->sum('total');
-            $s->sales_total = $salesTotal;
-            $s->commission = $salesTotal * $s->commission_rate / 100;
-            $s->outstanding = $s->outstanding();
-            return $s;
-        });
+        // คอมมิชชั่นเชียร์เบียร์ — ไม่รวมบิล VIP (แลกฟรี ไม่คิดยอด/คอม)
+        $sellers = Seller::where('event_id', $event->id)
+            ->with(['sales' => fn ($q) => $q->where('status', 'completed')
+                ->where('payment_type', '!=', 'vip')->with('items')])
+            ->get()->map(function ($s) {
+                $salesTotal = $s->sales->sum('total');
+                $s->sales_total = $salesTotal;
+                $s->commission = $salesTotal * $s->commission_rate / 100;
+                $s->outstanding = $s->outstanding();
+
+                // ขายสินค้าอะไรไปเท่าไหร่ — รวมจำนวน + ยอดจากบิลที่ขายสำเร็จ
+                $s->product_summary = $s->sales
+                    ->flatMap(fn ($sale) => $sale->items)
+                    ->groupBy('product_name')
+                    ->map(fn ($items, $name) => [
+                        'name' => $name,
+                        'qty' => $items->sum('quantity'),
+                        'total' => $items->sum('subtotal'),
+                    ])
+                    ->sortByDesc('total')
+                    ->values();
+
+                return $s;
+            });
 
         // ยอดขายแยกตามจุดขาย แยกสด/โอน/เครดิต ไว้ให้แอดมินเช็คเงินแต่ละจุด
         $byStation = Sale::where('event_id', $event->id)
@@ -248,9 +264,11 @@ class AdminController extends Controller
         })->sortByDesc('total')->values();
 
         // จุดไหนขายสินค้าอะไรได้กี่ชิ้น กี่บาท (ใช้ดูว่าแต่ละจุดขายอะไรดี)
+        // ไม่รวมบิล VIP (แลกฟรี) — ของที่แลกผ่านบัตร VIP แยกไว้อีกส่วนแล้ว
         $stationProducts = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->where('sales.event_id', $event->id)
             ->where('sales.status', 'completed')
+            ->where('sales.payment_type', '!=', 'vip')
             ->selectRaw('sales.station_id')
             ->selectRaw('sale_items.product_name')
             ->selectRaw('SUM(sale_items.quantity) as qty')
@@ -414,35 +432,61 @@ class AdminController extends Controller
      * สรุปบัตร VIP แลกเบียร์ฟรี — แยกออกจากกำไร/ขาดทุนของเบียร์ที่ขายปกติ
      *   bills  = จำนวนใบ VIP (บิล payment_type = vip ที่ไม่ถูกยกเลิก)
      *   bottles = จำนวนขวดที่แลกไปทั้งหมด
-     *   items  = แยกตามสินค้า (ชื่อ + จำนวนขวด)
+     *   items  = แยกตามสินค้า (ชื่อ + จำนวนขวด) — รวมทุกจุด
+     *   stations = แยกตามจุดขาย แต่ละจุดมี name, bills, bottles, items
      *
-     * @return array{bills: int, bottles: int, items: array<int, array{name: string, unit: string, qty: int}>}
+     * @return array{bills: int, bottles: int, items: array<int, array{name: string, unit: string, qty: int}>, stations: array<int, array{name: string, bills: int, bottles: int, items: array<int, array{name: string, unit: string, qty: int}>}>}
      */
     private function vipReport(int $eventId): array
     {
-        $bills = Sale::where('event_id', $eventId)
+        // จำนวนใบ VIP แยกตามจุดขายที่เปิดบิล
+        $billsByStation = Sale::where('event_id', $eventId)
             ->where('status', 'completed')
             ->where('payment_type', 'vip')
-            ->count();
+            ->selectRaw('station_id, COUNT(*) as bills')
+            ->groupBy('station_id')
+            ->pluck('bills', 'station_id');
 
+        // ขวดที่แลกไป แยกตามจุด + สินค้า
         $rows = SaleItem::join('sales', 'sales.id', '=', 'sale_items.sale_id')
             ->join('products', 'products.id', '=', 'sale_items.product_id')
+            ->leftJoin('stations', 'stations.id', '=', 'sales.station_id')
             ->where('sales.event_id', $eventId)
             ->where('sales.status', 'completed')
             ->where('sales.payment_type', 'vip')
+            ->selectRaw('sales.station_id, stations.name as station_name')
             ->selectRaw('products.name, products.unit')
             ->selectRaw('SUM(sale_items.quantity) as qty')
-            ->groupBy('products.id', 'products.name', 'products.unit')
+            ->groupBy('sales.station_id', 'stations.name', 'products.id', 'products.name', 'products.unit')
+            ->orderByDesc('qty')
             ->get();
 
+        // แยกข้อมูลเป็นรายจุดขาย
+        $stations = $rows->groupBy('station_id')->map(function ($items, $stationId) use ($billsByStation) {
+            return [
+                'name' => $items->first()->station_name ?? 'จุด #'.$stationId,
+                'bills' => (int) ($billsByStation[$stationId] ?? 0),
+                'bottles' => (int) $items->sum('qty'),
+                'items' => $items->map(fn ($r) => [
+                    'name' => $r->name,
+                    'unit' => $r->unit,
+                    'qty' => (int) $r->qty,
+                ])->values()->all(),
+            ];
+        })->sortByDesc('bottles')->values()->all();
+
+        // รวมทุกจุด (ไว้เป็นยอดรวม)
+        $totalItems = $rows->groupBy('name')->map(fn ($items, $name) => [
+            'name' => $name,
+            'unit' => $items->first()->unit,
+            'qty' => (int) $items->sum('qty'),
+        ])->sortByDesc('qty')->values()->all();
+
         return [
-            'bills' => $bills,
+            'bills' => (int) $billsByStation->sum(),
             'bottles' => (int) $rows->sum('qty'),
-            'items' => $rows->map(fn ($r) => [
-                'name' => $r->name,
-                'unit' => $r->unit,
-                'qty' => (int) $r->qty,
-            ])->all(),
+            'items' => $totalItems,
+            'stations' => $stations,
         ];
     }
 

@@ -125,42 +125,38 @@
             </table>
         </div>
 
-        {{-- บัตร VIP แลกเบียร์ฟรี — แยกออกจากกำไร/ขาดทุนด้านบน --}}
+        {{-- บัตร VIP แลกเบียร์ฟรี — แยกตามจุดขาย แยกออกจากกำไร/ขาดทุนด้านบน --}}
         @if($profit['vip']['bills'] > 0)
-            <div class="card mb-4" style="border-color:rgba(148,163,184,.35)">
-                <div class="p-3 d-flex justify-content-between align-items-center" style="background:rgba(148,163,184,.1)">
-                    <span class="fw-semibold fs-5"><i class="bi bi-person-badge"></i> บัตร VIP (แลกฟรี)</span>
-                    <span class="text-dim small"><i class="bi bi-info-circle"></i> แยกต่างหาก ไม่รวมในกำไร/ขาดทุน</span>
-                </div>
-                <div class="row g-3 p-3">
-                    <div class="col-6">
-                        <div class="text-center">
-                            <div class="small text-dim">จำนวนใบที่ใช้</div>
-                            <div class="fs-3 fw-bold">{{ number_format($profit['vip']['bills']) }} <small class="fs-6 text-dim">ใบ</small></div>
+            <h6 class="mb-2"><i class="bi bi-person-badge"></i> บัตร VIP (แลกฟรี) แยกตามจุดขาย
+                <span class="text-dim small fw-normal"><i class="bi bi-info-circle"></i> แยกต่างหาก ไม่รวมในกำไร/ขาดทุน</span>
+            </h6>
+
+            {{-- ยอดรวมทุกจุด --}}
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-md-3"><div class="card p-3 text-center"><div class="small text-dim">ใบที่ใช้ (ทุกจุด)</div><div class="fs-4 fw-bold">{{ number_format($profit['vip']['bills']) }} <small class="fs-6 text-dim">ใบ</small></div></div></div>
+                <div class="col-6 col-md-3"><div class="card p-3 text-center"><div class="small text-dim">เบียร์ที่แลกไป (ทุกจุด)</div><div class="fs-4 fw-bold text-warning">{{ number_format($profit['vip']['bottles']) }} <small class="fs-6 text-dim">ขวด</small></div></div></div>
+            </div>
+
+            {{-- แยกรายจุดขาย --}}
+            <div class="row g-3 mb-4">
+                @foreach($profit['vip']['stations'] as $vs)
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card p-3 h-100" style="border-color:rgba(148,163,184,.35)">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-semibold">{{ $vs['name'] }}</span>
+                                <span class="badge bg-secondary">{{ number_format($vs['bills']) }} ใบ · {{ number_format($vs['bottles']) }} ขวด</span>
+                            </div>
+                            @forelse($vs['items'] as $v)
+                                <div class="d-flex justify-content-between border-bottom py-1">
+                                    <span>{{ $v['name'] }}</span>
+                                    <b class="text-warning">{{ number_format($v['qty']) }} {{ $v['unit'] }}</b>
+                                </div>
+                            @empty
+                                <div class="text-muted small py-2">ไม่มีการแลก</div>
+                            @endforelse
                         </div>
                     </div>
-                    <div class="col-6">
-                        <div class="text-center">
-                            <div class="small text-dim">เบียร์ที่แลกไป</div>
-                            <div class="fs-3 fw-bold text-warning">{{ number_format($profit['vip']['bottles']) }} <small class="fs-6 text-dim">ขวด</small></div>
-                        </div>
-                    </div>
-                </div>
-                @if(count($profit['vip']['items']) > 0)
-                    <table class="table table-sm mb-0">
-                        <thead class="table-light">
-                            <tr><th>สินค้า</th><th class="text-end">แลกไป</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach($profit['vip']['items'] as $v)
-                                <tr>
-                                    <td>{{ $v['name'] }}</td>
-                                    <td class="text-end fw-semibold">{{ number_format($v['qty']) }} {{ $v['unit'] }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                @endif
+                @endforeach
             </div>
         @endif
 
@@ -253,6 +249,17 @@
                             <td class="text-end fw-bold text-info">{{ number_format($s->commission,2) }}</td>
                             <td class="text-end {{ $s->outstanding > 0 ? 'text-danger fw-bold' : 'text-muted' }}">{{ number_format($s->outstanding,0) }}</td>
                         </tr>
+                        @if($s->product_summary->count() > 0)
+                            <tr>
+                                <td></td>
+                                <td colspan="5" class="pt-0">
+                                    @foreach($s->product_summary as $key=>$p)
+                                     @if($key != 0) / @endif
+                                        <span><span class="text-muted">{{ $p['name'] }}  × {{ number_format($p['qty']) }} = {{ number_format($p['total'],0) }}</span></span>
+                                    @endforeach
+                                </td>
+                            </tr>
+                        @endif
                     @empty
                         <tr><td colspan="6" class="text-center text-muted py-3">ไม่มีข้อมูล</td></tr>
                     @endforelse

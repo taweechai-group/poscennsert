@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Event;
-use App\Models\Seller;
 use App\Models\Station;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -74,14 +73,7 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        // ---------- เชียร์เบียร์ (เดินขาย มีรหัส) ----------
-        $sellers = [
-            ['code' => 'C01', 'name' => 'สมชาย', 'commission_rate' => 10, 'credit_limit' => 5000],
-            ['code' => 'C02', 'name' => 'สมหญิง', 'commission_rate' => 10, 'credit_limit' => 3000],
-            ['code' => 'C03', 'name' => 'อนุชา', 'commission_rate' => 12, 'credit_limit' => 0], // ไม่จำกัด
-        ];
-        foreach ($sellers as $s) {
-            Seller::create(array_merge($s, ['event_id' => $event->id]));
-        }
+        // ---------- เชียร์เบียร์ (เดินขาย มีรหัส) — รายชื่อจริง เครดิต 1000 ----------
+        $this->call(CheerBeerSeeder::class);
     }
 }

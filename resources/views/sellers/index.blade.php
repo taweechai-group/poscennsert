@@ -55,6 +55,25 @@
                             </div>
                         @endif
                     </div>
+                    {{-- สรุปสินค้าที่ขายได้ — ขายอะไรไปเท่าไหร่ --}}
+                    <div class="mt-3">
+                        <div class="small text-dim mb-1"><i class="bi bi-box-seam"></i> สินค้าที่ขายได้</div>
+                        @if($s->product_summary->count() > 0)
+                            <table class="table table-sm mb-0" style="font-size:.85rem">
+                                <tbody>
+                                    @foreach($s->product_summary as $p)
+                                        <tr>
+                                            <td class="ps-0">{{ $p['name'] }}</td>
+                                            <td class="text-center text-dim">×{{ number_format($p['quantity'],0) }}</td>
+                                            <td class="text-end pe-0 fw-semibold">฿{{ number_format($p['total'],0) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        @else
+                            <div class="small text-dim">— ยังไม่มีการขาย</div>
+                        @endif
+                    </div>
                     <a href="{{ route('sellers.show', $s) }}" class="btn btn-grad btn-sm mt-3">
                         <i class="bi bi-list-ul"></i> รายละเอียด / รับชำระ
                     </a>

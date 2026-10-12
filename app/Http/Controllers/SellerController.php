@@ -17,12 +17,28 @@ class SellerController extends Controller
     public function index()
     {
         $eventId = $this->eventId();
-        $sellers = Seller::where('event_id', $eventId)->orderBy('code')->get()
+        $sellers = Seller::where('event_id', $eventId)->orderBy('code')
+            ->with(['sales' => fn ($q) => $q->where('status', 'completed')
+                ->where('payment_type', '!=', 'vip')->with('items')])
+            ->get()
             ->map(function ($s) {
                 $s->credit_total = $s->totalCredit();
                 $s->paid_total = $s->totalPaid();
                 $s->outstanding = $s->credit_total - $s->paid_total;
-                $s->sales_total = $s->sales()->where('status', 'completed')->sum('total');
+                $s->sales_total = $s->sales->sum('total');
+
+                // สรุปว่าขายสินค้าอะไรไปเท่าไหร่ — รวมจำนวนจากบิลที่ขายสำเร็จ
+                $s->product_summary = $s->sales
+                    ->flatMap(fn ($sale) => $sale->items)
+                    ->groupBy('product_name')
+                    ->map(fn ($items, $name) => [
+                        'name' => $name,
+                        'quantity' => $items->sum('quantity'),
+                        'total' => $items->sum('subtotal'),
+                    ])
+                    ->sortByDesc('total')
+                    ->values();
+
                 return $s;
             });
 
